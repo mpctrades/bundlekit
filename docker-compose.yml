@@ -1,0 +1,17 @@
+services:
+  web:
+    build: ./bundlekit-web
+    container_name: bundlekit-web
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bundlekit.rule=Host(`bundlekit.mpctrades.com`)"
+      - "traefik.http.routers.bundlekit.entrypoints=websecure"
+      - "traefik.http.routers.bundlekit.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bundlekit.loadbalancer.server.port=80"
+
+networks:
+  traefik:
+    external: true
