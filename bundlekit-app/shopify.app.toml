@@ -1,0 +1,63 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "490a6ed6c343d2fe603a54953cda54c7"
+name = "BundleKit"
+application_url = "https://bundlekit.com"
+embedded = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+#   read_products / write_products -> read the catalog, write the offer metafield
+#   write_discounts               -> create the automatic discount the Function runs
+#   read_orders                   -> revenue attribution only (Pro analytics)
+scopes = "read_products,write_products,write_discounts,read_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://bundlekit.com/auth/callback",
+  "https://bundlekit.com/auth/shopify/callback",
+  "https://bundlekit.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  # orders/create payloads carry customer PII (email, address), which also
+  # falls under Protected Customer Data approval — see note below. Commented
+  # out alongside the compliance topics until that's requested.
+  # [[webhooks.subscriptions]]
+  # topics = [ "orders/create" ]
+  # uri = "/webhooks/orders/create"
+
+  # customers/data_request and customers/redact require Protected Customer
+  # Data approval (Partner Dashboard > App setup > Protected customer data)
+  # before Shopify will let the CLI register them. Not yet requested for this
+  # app, so they're commented out to unblock local dev — restore both before
+  # any real deploy; the /webhooks/compliance handler already supports all
+  # three topics (app/routes/webhooks.compliance.tsx).
+  # See https://shopify.dev/docs/apps/launch/protected-customer-data
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "shop/redact" ]
+  uri = "/webhooks/compliance"
+
+  # [[webhooks.subscriptions]]
+  # compliance_topics = [ "customers/data_request", "customers/redact" ]
+  # uri = "/webhooks/compliance"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "bundlekit-aenkvjsc.myshopify.com"
+include_config_on_deploy = true

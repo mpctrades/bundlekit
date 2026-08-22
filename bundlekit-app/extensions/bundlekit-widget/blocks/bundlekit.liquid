@@ -1,0 +1,180 @@
+{% comment %}
+  BundleKit — product-page bundle widget.
+
+  The offer is read out of a product metafield and printed into the page as
+  JSON. There is no fetch, no round-trip, nothing to wait for: by the time the
+  script runs, the offer is already in the DOM. That is the whole reason this
+  widget can sit above the Add to cart button without costing you the sale.
+
+  If no offer targets this product, the block renders nothing at all.
+{% endcomment %}
+
+{%- assign offer = product.metafields.bundlekit.offer.value -%}
+
+{%- if offer != blank and offer.tiers.size > 0 -%}
+  {{ 'bundlekit.css' | asset_url | stylesheet_tag }}
+
+  <div
+    class="bundlekit{% if block.settings.card_style == 'soft' %} bundlekit--soft{% endif %}"
+    data-bundlekit
+    data-offer-id="{{ offer.id }}"
+    data-locale="{{ request.locale.iso_code | default: 'en' }}"
+    data-money-format="{{ shop.money_format | escape }}"
+    data-proxy="{{ shop.url }}/apps/bundlekit"
+    style="
+      --bk-accent: {{ block.settings.accent | default: offer.design.accent | default: '#FF4A1C' }};
+      --bk-radius: {{ block.settings.radius | default: 10 }}px;
+    "
+    {{ block.shopify_attributes }}
+  >
+    <script type="application/json" data-bundlekit-offer>
+      {{ product.metafields.bundlekit.offer | json }}
+    </script>
+
+    <script type="application/json" data-bundlekit-product>
+      {
+        "id": {{ product.id | json }},
+        "selected": {{ product.selected_or_first_available_variant.id | json }},
+        "variants": [
+          {%- for variant in product.variants -%}
+            {
+              "id": {{ variant.id | json }},
+              "price": {{ variant.price | json }},
+              "available": {{ variant.available | json }}
+            }{%- unless forloop.last -%},{%- endunless -%}
+          {%- endfor -%}
+        ]
+      }
+    </script>
+
+    <script type="application/json" data-bundlekit-strings>
+      {
+        "heading": {{ block.settings.heading | default: 'bundlekit.heading' | t | json }},
+        "unit": {{ 'bundlekit.unit' | t | json }},
+        "units": {{ 'bundlekit.units' | t | json }},
+        "save": {{ 'bundlekit.save' | t | json }},
+        "regular": {{ 'bundlekit.regular' | t | json }},
+        "per_unit": {{ 'bundlekit.per_unit' | t | json }},
+        "badge": {{ block.settings.badge_text | default: 'bundlekit.badge' | t | json }},
+        "trust": {{ 'bundlekit.trust' | t | json }},
+        "add_to_cart": {{ 'bundlekit.add_to_cart' | t | json }},
+        "routine_heading": {{ 'bundlekit.routine_heading' | t | json }},
+        "this_item": {{ 'bundlekit.this_item' | t | json }},
+        "selected": {{ 'bundlekit.selected' | t | json }},
+        "you_save": {{ 'bundlekit.you_save' | t | json }},
+        "add_items": {{ 'bundlekit.add_items' | t | json }},
+        "adding": {{ 'bundlekit.adding' | t | json }},
+        "added": {{ 'bundlekit.added' | t | json }},
+        "error": {{ 'bundlekit.error' | t | json }}
+      }
+    </script>
+
+    <script type="application/json" data-bundlekit-settings>
+      {
+        "showTrustLine": {{ block.settings.show_trust_line | json }},
+        "updateButtonLabel": {{ block.settings.update_button_label | json }},
+        "beacons": {{ block.settings.analytics | json }},
+        "savingsDisplay": {{ block.settings.savings_display | default: offer.design.savingsDisplay | default: 'both' | json }},
+        "cardStyle": {{ block.settings.card_style | default: offer.design.cardStyle | default: 'outline' | json }}
+      }
+    </script>
+
+    {%- comment -%}
+      Server-rendered skeleton so the block occupies its final height before
+      the script runs. No layout shift, no flash of a half-drawn widget.
+    {%- endcomment -%}
+    <div class="bundlekit__frame" data-bundlekit-root>
+      <div class="bundlekit__head">
+        <span>{{ block.settings.heading | default: 'bundlekit.heading' | t }}</span>
+      </div>
+      {%- for tier in offer.tiers -%}
+        <div class="bundlekit__skeleton" aria-hidden="true"></div>
+      {%- endfor -%}
+      <div class="bundlekit__skeleton" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <script src="{{ 'bundlekit.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "BundleKit — Bundle & save",
+  "target": "section",
+  "stylesheet": "bundlekit.css",
+  "javascript": "bundlekit.js",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Drag this block directly above your Buy buttons. It shows on products that an offer targets, and stays invisible everywhere else."
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "info": "Leave empty to use the translated default."
+    },
+    {
+      "type": "text",
+      "id": "badge_text",
+      "label": "Badge text",
+      "info": "Shown on the tier you marked in BundleKit."
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent colour",
+      "default": "#FF4A1C"
+    },
+    {
+      "type": "range",
+      "id": "radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 24,
+      "step": 2,
+      "unit": "px",
+      "default": 10
+    },
+    {
+      "type": "checkbox",
+      "id": "show_trust_line",
+      "label": "Show \"discount applied at checkout\"",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "update_button_label",
+      "label": "Update the Add to cart button label",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "analytics",
+      "label": "Send view and selection counts to BundleKit",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "savings_display",
+      "label": "Show savings as",
+      "options": [
+        { "value": "amount", "label": "Amount" },
+        { "value": "percentage", "label": "Percentage" },
+        { "value": "both", "label": "Both" }
+      ],
+      "default": "both"
+    },
+    {
+      "type": "select",
+      "id": "card_style",
+      "label": "Card style",
+      "options": [
+        { "value": "outline", "label": "Outline" },
+        { "value": "soft", "label": "Soft" }
+      ],
+      "default": "outline"
+    }
+  ]
+}
+{% endschema %}

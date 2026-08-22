@@ -1,0 +1,5 @@
+name = "app"
+roles = ["backend", "frontend"]
+
+[commands]
+dev = "npm exec vite dev"

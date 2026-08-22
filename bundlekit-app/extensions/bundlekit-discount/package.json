@@ -1,0 +1,22 @@
+{
+  "name": "bundlekit-discount",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "shopify app function build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shopify/shopify_function": "^2.0.1"
+  },
+  "codegen": {
+    "schema": "schema.graphql",
+    "documents": ["src/**/*.graphql"],
+    "generates": {
+      "generated/api.ts": {
+        "plugins": ["typescript", "typescript-operations"]
+      }
+    }
+  }
+}

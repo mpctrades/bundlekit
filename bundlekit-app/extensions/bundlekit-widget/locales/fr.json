@@ -1,0 +1,21 @@
+{
+  "bundlekit": {
+    "heading": "Pack & économies",
+    "unit": "unité",
+    "units": "unités",
+    "save": "de remise",
+    "regular": "Prix normal",
+    "per_unit": "/ unité",
+    "badge": "Le plus choisi",
+    "trust": "Remise appliquée automatiquement à la caisse",
+    "add_to_cart": "Ajouter %qty% au panier",
+    "routine_heading": "Complétez la routine",
+    "this_item": "Ce produit",
+    "selected": "Sélection",
+    "you_save": "vous économisez",
+    "add_items": "Ajouter %qty% articles au panier",
+    "adding": "Ajout…",
+    "added": "Ajouté",
+    "error": "L'ajout au panier a échoué. Merci de réessayer."
+  }
+}

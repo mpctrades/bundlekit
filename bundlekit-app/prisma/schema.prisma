@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // swap to "sqlite" for a zero-setup local run
+  url      = env("DATABASE_URL")
+}
+
+// Required by @shopify/shopify-app-session-storage-prisma
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model Shop {
+  id            String   @id @default(cuid())
+  domain        String   @unique
+  currency      String   @default("EUR")
+  primaryLocale String   @default("en")
+  functionId    String?  // cached Shopify Function id for the discount
+  installedAt   DateTime @default(now())
+  offers        Offer[]
+
+  // Design defaults (Design page): new offers inherit these unless the
+  // merchant overrides them per-offer. Mirror OfferConfig["design"].
+  defaultAccent        String  @default("#FF4A1C")
+  defaultRadius        Int     @default(10)
+  defaultShowTrustLine Boolean @default(true)
+  defaultBadgeText     String  @default("Most popular")
+
+  // Combining-discount defaults (Settings page): what a new offer pre-selects.
+  combineProductDefault Boolean @default(false)
+  combineOrderDefault   Boolean @default(false)
+
+  // Widget defaults (Design page): new offers inherit these unless overridden.
+  defaultWidgetTitle   String @default("Bundle & save")
+  defaultSavingsDisplay String @default("both")    // "amount" | "percentage" | "both"
+  defaultCardStyle     String @default("outline")  // "outline" | "soft"
+}
+
+model Offer {
+  id     String @id @default(cuid())
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  name   String
+  kind   String @default("quantity") // "quantity" | "companion"
+  status String @default("draft")    // "draft" | "live" | "paused"
+
+  // Optional schedule (F9). Null startsAt means "start immediately" at
+  // publish time. computeDisplayStatus() derives "scheduled" / "paused"
+  // (ended) from these against status "live" — no cron job needed.
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  // Targeting (F6): "products" | "collection" | "all"
+  targetType String   @default("products")
+  targetIds  String[] @default([]) // product or collection gids
+
+  // The contract shared by admin, widget and Function. See README > Offer JSON.
+  config Json
+
+  // Combining-with-other-discounts choices, persisted so the builder can
+  // reload the merchant's actual prior selection (previously only lived in
+  // transient form data at publish time and always reset to false on load).
+  combineProduct Boolean @default(false)
+  combineOrder   Boolean @default(false)
+
+  discountGid  String? // gid of the automatic app discount backing this offer
+  productCount Int     @default(0)
+
+  // Snapshot of resolveTargetProducts(), written on every publish. Lets
+  // conflict detection (F5) compare offers against each other without
+  // re-resolving collections/"all products" through the Admin API each time.
+  resolvedProductIds String[] @default([])
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  stats     OfferStat[]
+
+  @@index([shopId, status])
+}
+
+model OfferStat {
+  id      String   @id @default(cuid())
+  offer   Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerId String
+  day     DateTime @db.Date
+  views   Int      @default(0)
+  selects Int      @default(0)
+  orders  Int      @default(0)
+  revenue Decimal  @default(0) @db.Decimal(12, 2)
+
+  @@unique([offerId, day])
+}

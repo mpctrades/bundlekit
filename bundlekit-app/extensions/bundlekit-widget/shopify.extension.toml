@@ -1,0 +1,7 @@
+api_version = "2026-07"
+
+[[extensions]]
+type = "theme"
+name = "BundleKit widget"
+handle = "bundlekit"
+uid = "ae3ad8c5-765f-b3d0-6624-ae07d0c9c38513395a16"

@@ -1,0 +1,21 @@
+{
+  "bundlekit": {
+    "heading": "Bundle & save",
+    "unit": "unit",
+    "units": "units",
+    "save": "save",
+    "regular": "Regular price",
+    "per_unit": "/ unit",
+    "badge": "Most popular",
+    "trust": "Discount applied automatically at checkout",
+    "add_to_cart": "Add %qty% to cart",
+    "routine_heading": "Complete the routine",
+    "this_item": "This item",
+    "selected": "Selected",
+    "you_save": "you save",
+    "add_items": "Add %qty% items to cart",
+    "adding": "Adding…",
+    "added": "Added",
+    "error": "That did not add to your cart. Please try again."
+  }
+}

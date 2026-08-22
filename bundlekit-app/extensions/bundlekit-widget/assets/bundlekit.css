@@ -1,0 +1,163 @@
+/*
+  BundleKit widget styles.
+
+  Everything here inherits: font-family, colour and button shape come from the
+  theme. We set structure and one accent, nothing else. No @font-face, no
+  reset, no !important — this stylesheet is a guest on someone else's page.
+*/
+
+.bundlekit {
+  --bk-accent: #ff4a1c;
+  --bk-radius: 10px;
+  --bk-border: rgba(0, 0, 0, 0.12);
+  --bk-muted: rgba(0, 0, 0, 0.58);
+
+  font-family: inherit;
+  color: inherit;
+  margin: 1.2rem 0;
+}
+
+.bundlekit__frame {
+  border: 1px solid var(--bk-border);
+  border-radius: var(--bk-radius);
+  padding: 0.85rem;
+}
+
+.bundlekit__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bk-muted);
+  margin-bottom: 0.7rem;
+}
+
+.bundlekit__tier {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1.5px solid var(--bk-border);
+  border-radius: calc(var(--bk-radius) - 2px);
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.45rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.bundlekit__tier:hover {
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
+.bundlekit__tier.is-selected {
+  border-color: var(--bk-accent);
+  background: color-mix(in srgb, var(--bk-accent) 7%, transparent);
+}
+
+/* Soft card style: fill instead of an accent-coloured border, so the accent
+   reads once (the badge) instead of competing with itself. */
+.bundlekit--soft .bundlekit__tier.is-selected {
+  border-color: var(--bk-border);
+  background: color-mix(in srgb, var(--bk-accent) 12%, transparent);
+}
+
+.bundlekit__tier:focus-visible {
+  outline: 2px solid var(--bk-accent);
+  outline-offset: 2px;
+}
+
+.bundlekit__dot {
+  flex: 0 0 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.bundlekit__tier.is-selected .bundlekit__dot {
+  border-color: var(--bk-accent);
+}
+
+.bundlekit__dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--bk-accent);
+  transform: scale(0);
+  transition: transform 0.15s ease;
+}
+
+.bundlekit__tier.is-selected .bundlekit__dot::after {
+  transform: scale(1);
+}
+
+.bundlekit__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.bundlekit__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.bundlekit__note,
+.bundlekit__savings {
+  font-size: 0.75rem;
+  color: var(--bk-muted);
+}
+
+.bundlekit__badge {
+  background: var(--bk-accent);
+  color: #fff;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.bundlekit__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  white-space: nowrap;
+}
+
+.bundlekit__total {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.bundlekit__trust {
+  font-size: 0.72rem;
+  color: var(--bk-muted);
+  margin: 0.5rem 0 0;
+}
+
+/* Holds the block's height before the script runs, so nothing jumps. */
+.bundlekit__skeleton {
+  height: 46px;
+  border-radius: calc(var(--bk-radius) - 2px);
+  background: rgba(0, 0, 0, 0.05);
+  margin-bottom: 0.45rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bundlekit__tier,
+  .bundlekit__dot::after {
+    transition: none;
+  }
+}

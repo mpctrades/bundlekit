@@ -1,0 +1,20 @@
+api_version = "2026-07"
+
+[[extensions]]
+name = "BundleKit discount"
+handle = "bundlekit-discount"
+uid = "37cd8c18-4089-843a-54c8-82816530e532f40a9cab"
+type = "function"
+
+  [[extensions.targeting]]
+  target = "purchase.product-discount.run"
+  input_query = "src/run.graphql"
+  export = "run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
+
+  [extensions.ui.paths]
+  create = "/app/offers/new"
+  details = "/app/offers/:id"

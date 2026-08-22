@@ -1,0 +1,27 @@
+# What the Function is allowed to see at checkout. Keep it minimal: every field
+# here is data we are asking Shopify to hand us on every cart evaluation.
+query RunInput {
+  cart {
+    lines {
+      id
+      quantity
+      cost {
+        amountPerQuantity { amount }
+      }
+      bundleTag: attribute(key: "_bundlekit") { value }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          product {
+            id
+            offer: metafield(namespace: "bundlekit", key: "offer") { value }
+          }
+        }
+      }
+    }
+  }
+  discountNode {
+    config: metafield(namespace: "$app:bundlekit", key: "config") { value }
+  }
+}
