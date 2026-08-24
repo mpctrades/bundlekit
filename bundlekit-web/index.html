@@ -356,6 +356,9 @@
   table.compare .bk-col{ background:var(--flame-tint); font-weight:700; }
   table.compare th.bk-col{ background:var(--ink); color:#fff; border-radius:0; }
   .compare-foot{ font-size:.78rem; color:var(--ink-soft); margin-top:12px; }
+  table.compare td.soon{ color:var(--ink-soft); font-family:"IBM Plex Mono", monospace; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+  .soon-tag{ display:inline-flex; align-items:center; gap:6px; margin-left:8px; font-family:"IBM Plex Mono", monospace; font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); vertical-align:middle; white-space:nowrap; }
+  .soon-tag .dot{ width:6px; height:6px; border-radius:50%; background:var(--ink-soft); flex-shrink:0; }
 
   /* ---------------- Pricing ---------------- */
   .plans{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
@@ -605,13 +608,13 @@
     <div class="step-row">
       <div class="step-num-big">01</div>
       <div class="step-copy">
-        <h3>Install from the Shopify App Store</h3>
-        <p>Search BundleKit, click Install, approve the permissions. The free plan needs no card. BundleKit asks only for what it uses: products, discounts, and orders for revenue reporting.</p>
-        <span class="step-meta">≈ 30 seconds</span>
+        <h3>Join the waitlist for early access</h3>
+        <p>BundleKit isn't on the Shopify App Store yet, so there's nothing to search for there today. Join the waitlist and we'll email you the install link the moment your store is invited in — from there, install is one click: approve the permissions and you're in. The free plan needs no card.</p>
+        <span class="step-meta">Early access, in sign-up order</span>
       </div>
       <div class="term">
-        <div class="dim">apps.shopify.com/bundlekit</div>
-        <div><span class="arrow">→</span> Install</div>
+        <div class="dim">Join the waitlist below</div>
+        <div><span class="arrow">→</span> We email your install link</div>
         <div><span class="arrow">→</span> Approve access</div>
         <div class="ok">✓ BundleKit is in your Apps menu</div>
       </div>
@@ -730,7 +733,7 @@
       </div>
       <div class="feature-cell">
         <div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2"/><path d="M10 10l4 4" stroke="currentColor" stroke-width="2"/></svg></div>
-        <h3>"Complete the routine" bundles</h3>
+        <h3>"Complete the routine" bundles <span class="soon-tag"><span class="dot"></span>Coming soon</span></h3>
         <p>Sell products that belong together — cleanser, toner, serum — with one checkbox row and a combined price. The second AOV lever, for catalogs built around routines.</p>
       </div>
       <div class="feature-cell">
@@ -772,7 +775,7 @@
         </tr>
         <tr>
           <td>"Complete the routine" companion bundle</td>
-          <td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="bk-col">✓</td>
+          <td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="bk-col soon">Soon</td>
         </tr>
         <tr>
           <td>Real discounts via Shopify Functions</td>
@@ -827,7 +830,7 @@
       <a class="plan-cta" href="#contact">Start with Grow</a>
       <ul>
         <li>10 live offers</li>
-        <li>Both widgets — tiers + routine</li>
+        <li>Quantity-break tiers <span class="soon-tag"><span class="dot"></span>Routine bundles soon</span></li>
         <li>All discount types</li>
         <li>Full design controls, no badge</li>
       </ul>
@@ -1059,10 +1062,12 @@
   });
 
   // BundleKit isn't published on the Shopify App Store yet, so there's no
-  // listing URL to send people to — this points at the App Store's homepage
-  // as a placeholder. Once BundleKit has its own listing, swap this for that
-  // exact URL and every install button on the page updates automatically.
-  var SHOPIFY_APP_URL = "https://apps.shopify.com";
+  // listing URL to send people to. Leave this empty — every install button
+  // then just keeps its default href="#contact" (the waitlist form) instead
+  // of dead-ending on Shopify's generic App Store homepage. Once BundleKit
+  // has its own listing, set this to that exact URL and every install
+  // button on the page updates automatically.
+  var SHOPIFY_APP_URL = "";
   if (SHOPIFY_APP_URL) {
     document.querySelectorAll('[data-install-cta]').forEach(function(el){
       el.setAttribute('href', SHOPIFY_APP_URL);
