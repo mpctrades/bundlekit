@@ -152,5 +152,22 @@ the one-cent checkout bug that fills competitors' one-star reviews.
   cart path (`window.BundleKit.addLines`) and the Function branch already exist.
 - App Bridge resource picker to replace the product-ID text field in the offer
   builder.
-- Managed Pricing plan gates (offer count limits per plan).
 - Onboarding wizard (W6), analytics dashboard card (W6).
+
+## Plans & billing
+
+Managed Pricing (Free / Pro / Plus, gated on offer count) is built —
+`app/routes/app.billing.tsx`, `app/lib/billing.server.ts`. Two things still
+need doing outside this repo before it's live:
+
+1. Create the "Pro" and "Plus" plans in the Partner Dashboard (App setup >
+   Pricing), with names matching `app/lib/billing.server.ts`'s `PLANS`
+   exactly — that name is the only link between a Shopify `AppSubscription`
+   and a plan tier.
+2. Set `SHOPIFY_APP_HANDLE` (see `.env.example`) to the app's handle as
+   shown in the Partner Dashboard — it's part of the Shopify-hosted
+   plan-selection URL and isn't the same as the app name.
+
+Plan is read live from `currentAppInstallation.activeSubscriptions` on every
+billing-page load and offer-creation attempt — there's no webhook for
+Managed Pricing plan changes, so this is intentionally not cached.

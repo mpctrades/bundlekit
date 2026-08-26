@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionList, Button, Modal, Popover, Text } from "@shopify/polaris";
 import { MenuHorizontalIcon } from "@shopify/polaris-icons";
 import { useFetcher } from "react-router";
+import { useToast } from "./ToastProvider";
 
 export interface OfferActionsMenuProps {
   offerId: string;
@@ -9,6 +10,13 @@ export interface OfferActionsMenuProps {
   status: "draft" | "scheduled" | "live" | "paused";
   onEdit: () => void;
 }
+
+const INTENT_SUCCESS_MESSAGE: Record<string, string> = {
+  duplicate: "Offer duplicated",
+  pause: "Offer paused — the discount is off for shoppers",
+  resume: "Offer resumed — the discount is live again",
+  delete: "Offer deleted",
+};
 
 /** Row-level lifecycle actions (Edit / Duplicate / Pause-Resume / Delete).
  *  Submits to the current route's action via a fetcher so the offers list
@@ -18,8 +26,28 @@ export function OfferActionsMenu({ offerId, offerName, status, onEdit }: OfferAc
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const fetcher = useFetcher();
   const busy = fetcher.state !== "idle";
+  const { showToast } = useToast();
+  const lastIntent = useRef<string | null>(null);
+  const previousState = useRef(fetcher.state);
 
-  const submit = (intent: string) => fetcher.submit({ intent, offerId }, { method: "post" });
+  const submit = (intent: string) => {
+    lastIntent.current = intent;
+    fetcher.submit({ intent, offerId }, { method: "post" });
+  };
+
+  // Fires once per completed submission (idle -> submitting -> idle), not on
+  // every render — a merchant needs to see the result even for a click that
+  // happens off-screen (e.g. from the popover, which closes immediately).
+  useEffect(() => {
+    if (previousState.current !== "idle" && fetcher.state === "idle" && fetcher.data) {
+      if ("error" in fetcher.data && fetcher.data.error) {
+        showToast(fetcher.data.error, true);
+      } else if (lastIntent.current) {
+        showToast(INTENT_SUCCESS_MESSAGE[lastIntent.current] ?? "Done");
+      }
+    }
+    previousState.current = fetcher.state;
+  }, [fetcher.state, fetcher.data, showToast]);
 
   const items = [
     { content: "Edit", onAction: () => { setOpen(false); onEdit(); } },
@@ -56,8 +84,6 @@ export function OfferActionsMenu({ offerId, offerName, status, onEdit }: OfferAc
     },
   ];
 
-  const error = fetcher.data && "error" in fetcher.data ? fetcher.data.error : undefined;
-
   return (
     <>
       <div onClick={(event) => event.stopPropagation()} style={{ position: "relative" }}>
@@ -76,15 +102,6 @@ export function OfferActionsMenu({ offerId, offerName, status, onEdit }: OfferAc
         >
           <ActionList items={items} />
         </Popover>
-        {error ? (
-          <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 1, width: 240, marginTop: 4 }}>
-            <div style={{ background: "#FFF4F4", border: "1px solid #FED3D1", borderRadius: 8, padding: "8px 10px" }}>
-              <Text as="p" tone="critical" variant="bodySm">
-                {error}
-              </Text>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <Modal

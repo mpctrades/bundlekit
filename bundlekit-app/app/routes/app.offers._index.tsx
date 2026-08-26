@@ -15,6 +15,7 @@ import {
   type OfferConfig,
 } from "../lib/offers.server";
 import { getOrCreateShop } from "../lib/shop.server";
+import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
@@ -95,7 +96,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     else if (intent === "delete") await deleteOffer(admin, offerId, shop.id);
     else return { error: `Unknown action "${intent}".` };
   } catch (error) {
-    return { error: (error as Error).message };
+    return { error: friendlyErrorMessage(error) };
   }
 
   return { ok: true };

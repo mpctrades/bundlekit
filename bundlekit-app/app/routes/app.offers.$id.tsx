@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Banner,
   BlockStack,
@@ -6,6 +6,7 @@ import {
   Button,
   ButtonGroup,
   Checkbox,
+  EmptyState,
   InlineStack,
   Layout,
   Page,
@@ -14,7 +15,15 @@ import {
   Text,
   TextField,
 } from "@shopify/polaris";
-import { useActionData, useLoaderData, useNavigate, useNavigation, useSubmit } from "react-router";
+import {
+  isRouteErrorResponse,
+  useActionData,
+  useLoaderData,
+  useNavigate,
+  useNavigation,
+  useRouteError,
+  useSubmit,
+} from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -28,10 +37,14 @@ import {
   type OfferConfig,
 } from "../lib/offers.server";
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
+import { getActivePlan } from "../lib/billing.server";
+import { getOfferLimit } from "../lib/billing";
+import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
 import { ResourcePickerField, type PickedResource } from "../components/ResourcePickerField";
 import { StatusPill } from "../components/StatusPill";
+import { useToast } from "../components/ToastProvider";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -39,6 +52,13 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const previewDesign = { savingsDisplay: shop.defaultSavingsDisplay as SavingsDisplay, cardStyle: shop.defaultCardStyle as CardStyle };
 
   if (params.id === "new") {
+    const [plan, offerCount] = await Promise.all([
+      getActivePlan(admin),
+      prisma.offer.count({ where: { shopId: shop.id } }),
+    ]);
+    if (offerCount >= getOfferLimit(plan)) {
+      return { limitReached: true as const, plan };
+    }
     return {
       offer: {
         id: "new",
@@ -47,6 +67,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
         status: "draft",
         targetType: "products",
         targetResources: [] as PickedResource[],
+        resourceLoadError: false,
         tiers: DEFAULT_TIERS,
         accent: shop.defaultAccent,
         combineProduct: shop.combineProductDefault,
@@ -61,15 +82,33 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     };
   }
 
-  const offer = await prisma.offer.findFirstOrThrow({
+  const offer = await prisma.offer.findFirst({
     where: { id: params.id, shopId: shop.id },
   });
+  // A missing offer (deleted from another tab, stale list, bad link) must
+  // surface as a normal 404 the route can render — an uncaught Prisma error
+  // here would otherwise bubble past this route's ErrorBoundary.
+  if (!offer) {
+    throw new Response("Offer not found", { status: 404 });
+  }
   const config = offer.config as unknown as OfferConfig;
 
   // The database only ever stores gids — resolve them to titles/thumbnails
-  // so the builder never has to show a merchant a raw Shopify id.
-  const targetResources =
-    offer.targetType === "all" ? [] : await fetchResourceSummaries(admin, offer.targetIds);
+  // so the builder never has to show a merchant a raw Shopify id. This call
+  // can fail independently of everything else here (e.g. a scope the shop
+  // hasn't re-approved since it was added) — that must degrade to a banner,
+  // not take the whole page down. Losing the offer builder because a
+  // display-name lookup failed would be a worse outcome than showing raw ids.
+  let targetResources: PickedResource[] = [];
+  let resourceLoadError = false;
+  if (offer.targetType !== "all") {
+    try {
+      targetResources = await fetchResourceSummaries(admin, offer.targetIds);
+    } catch {
+      resourceLoadError = true;
+      targetResources = offer.targetIds.map((id) => ({ id, title: "Unable to load name", image: null }));
+    }
+  }
 
   return {
     offer: {
@@ -79,6 +118,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       status: offer.status,
       targetType: offer.targetType,
       targetResources,
+      resourceLoadError,
       tiers: config.tiers ?? DEFAULT_TIERS,
       accent: config.design?.accent ?? shop.defaultAccent,
       combineProduct: offer.combineProduct,
@@ -100,6 +140,19 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const shop = await getOrCreateShop(session.shop);
+
+  // Belt-and-suspenders: the "new" loader already hides the builder once a
+  // shop is at its plan's offer limit, but that's a UI nicety, not a lock —
+  // a direct POST (or a stale tab) must not be able to create past it.
+  if (params.id === "new") {
+    const [plan, offerCount] = await Promise.all([
+      getActivePlan(admin),
+      prisma.offer.count({ where: { shopId: shop.id } }),
+    ]);
+    if (offerCount >= getOfferLimit(plan)) {
+      return { error: "You've reached your plan's offer limit. Upgrade to add more offers." };
+    }
+  }
 
   const name = String(form.get("name") || "Untitled offer");
   const targetType = String(form.get("targetType") || "products");
@@ -241,7 +294,7 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
       return { ok: true, offerId: offer.id, note };
     } catch (error) {
-      return { error: (error as Error).message, offerId: offer.id };
+      return { error: friendlyErrorMessage(error), offerId: offer.id };
     }
   }
 
@@ -268,25 +321,69 @@ function fromDatetimeLocalValue(value: string): string {
 }
 
 export default function OfferBuilder() {
-  const { offer, shopDomain, badgeText, previewDesign } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+  const data = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
   const busy = navigation.state === "submitting";
+  const { showToast } = useToast();
+  const lastIntent = useRef<"save" | "publish" | null>(null);
 
-  const [name, setName] = useState(offer.name);
-  const [targetType, setTargetType] = useState(offer.targetType);
-  const [targetResources, setTargetResources] = useState<PickedResource[]>(offer.targetResources);
-  const [tiers, setTiers] = useState<Tier[]>(offer.tiers);
-  const [accent, setAccent] = useState(offer.accent);
-  const [combineProduct, setCombineProduct] = useState(offer.combineProduct);
-  const [combineOrder, setCombineOrder] = useState(offer.combineOrder);
-  const [scheduleMode, setScheduleMode] = useState<"immediate" | "scheduled">(offer.startsAt ? "scheduled" : "immediate");
-  const [startsAtLocal, setStartsAtLocal] = useState(toDatetimeLocalValue(offer.startsAt));
-  const [endsAtLocal, setEndsAtLocal] = useState(toDatetimeLocalValue(offer.endsAt));
+  useEffect(() => {
+    if (!actionData) return;
+    if ("error" in actionData && actionData.error) {
+      showToast(actionData.error, true);
+    } else if ("ok" in actionData) {
+      showToast(lastIntent.current === "publish" ? "Offer published" : "Offer saved");
+    }
+    // actionData is a fresh object each submission, so this only fires once per response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
+
+  // All hooks below must run on every render regardless of which loader
+  // shape came back — a limit-reached response has no `offer` to seed state
+  // from, so it falls back to an empty draft that's never actually shown
+  // (the branch below returns before this state is used).
+  const limitReached = "limitReached" in data && data.limitReached;
+  const offer = limitReached
+    ? null
+    : data.offer;
+
+  const [name, setName] = useState(offer?.name ?? "");
+  const [targetType, setTargetType] = useState(offer?.targetType ?? "products");
+  const [targetResources, setTargetResources] = useState<PickedResource[]>(offer?.targetResources ?? []);
+  const [tiers, setTiers] = useState<Tier[]>(offer?.tiers ?? DEFAULT_TIERS);
+  const [accent, setAccent] = useState(offer?.accent ?? "#FF4A1C");
+  const [combineProduct, setCombineProduct] = useState(offer?.combineProduct ?? false);
+  const [combineOrder, setCombineOrder] = useState(offer?.combineOrder ?? false);
+  const [scheduleMode, setScheduleMode] = useState<"immediate" | "scheduled">(offer?.startsAt ? "scheduled" : "immediate");
+  const [startsAtLocal, setStartsAtLocal] = useState(toDatetimeLocalValue(offer?.startsAt ?? null));
+  const [endsAtLocal, setEndsAtLocal] = useState(toDatetimeLocalValue(offer?.endsAt ?? null));
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
+  if (limitReached || !offer) {
+    return (
+      <Page title="New offer" backAction={{ onAction: () => navigate("/app/offers") }}>
+        <Layout>
+          <Layout.Section>
+            <Panel>
+              <EmptyState
+                heading="You've reached your plan's offer limit"
+                action={{ content: "View plans", onAction: () => navigate("/app/billing") }}
+                secondaryAction={{ content: "Back to offers", onAction: () => navigate("/app/offers") }}
+                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+              >
+                <p>Upgrade your plan to create more offers.</p>
+              </EmptyState>
+            </Panel>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  const { shopDomain, badgeText, previewDesign } = data;
   const previewUnitPrice = 1990; // €19.90, the preview product
 
   const update = (index: number, patch: Partial<Tier>) =>
@@ -301,6 +398,7 @@ export default function OfferBuilder() {
   };
 
   const save = (intent: "save" | "publish") => {
+    lastIntent.current = intent;
     const form = new FormData();
     form.set("intent", intent);
     form.set("name", name);
@@ -329,6 +427,16 @@ export default function OfferBuilder() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            {offer.resourceLoadError ? (
+              <Banner tone="warning" title="Couldn't load product names">
+                <p>
+                  Your targeting is still saved correctly, but BundleKit couldn't fetch product or
+                  collection names from Shopify right now — this usually means the app needs to be
+                  reinstalled to pick up a permission update. Reinstalling BundleKit from your
+                  Shopify admin will fix this.
+                </p>
+              </Banner>
+            ) : null}
             {actionData && "error" in actionData && actionData.error ? (
               <Banner tone="critical" title="This offer was not published">
                 <p>{actionData.error}</p>
@@ -620,4 +728,30 @@ export default function OfferBuilder() {
       </Layout>
     </Page>
   );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return (
+      <Page title="Offer">
+        <Layout>
+          <Layout.Section>
+            <Panel>
+              <EmptyState
+                heading="This offer no longer exists"
+                action={{ content: "Back to offers", url: "/app/offers" }}
+                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+              >
+                <p>It may have been deleted, or the link is out of date.</p>
+              </EmptyState>
+            </Panel>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+  // Anything else (auth/session errors, unexpected failures) is handled by
+  // the app-level boundary, which knows how to deal with reauthentication.
+  throw error;
 }

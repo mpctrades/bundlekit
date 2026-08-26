@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Banner, BlockStack, Button, Checkbox, Collapsible, Icon, InlineStack, Layout, Page, Text } from "@shopify/polaris";
 import { ChevronDownIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
@@ -9,6 +9,7 @@ import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { useToast } from "../components/ToastProvider";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -48,10 +49,16 @@ export default function Settings() {
   const navigation = useNavigation();
   const submit = useSubmit();
   const busy = navigation.state === "submitting";
+  const { showToast } = useToast();
 
   const [combineProductDefault, setCombineProductDefault] = useState(data.combineProductDefault);
   const [combineOrderDefault, setCombineOrderDefault] = useState(data.combineOrderDefault);
   const [technicalOpen, setTechnicalOpen] = useState(false);
+
+  useEffect(() => {
+    if (actionData && "ok" in actionData) showToast("Settings saved");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
 
   const save = () => {
     const form = new FormData();

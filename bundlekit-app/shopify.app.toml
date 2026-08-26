@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "490a6ed6c343d2fe603a54953cda54c7"
+client_id = "a8858b880781d71586cdb9d118edf02c"
 name = "BundleKit"
-application_url = "https://bundlekit.com"
+application_url = "https://dev.bundlekit.mpctrades.com"
 embedded = true
 
 [access_scopes]
@@ -16,9 +16,9 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://bundlekit.com/auth/callback",
-  "https://bundlekit.com/auth/shopify/callback",
-  "https://bundlekit.com/api/auth/callback"
+  "https://dev.bundlekit.mpctrades.com/auth/callback",
+  "https://dev.bundlekit.mpctrades.com/auth/shopify/callback",
+  "https://dev.bundlekit.mpctrades.com/api/auth/callback"
 ]
 
 [webhooks]

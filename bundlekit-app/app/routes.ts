@@ -11,6 +11,7 @@ export default [
     route("design", "routes/app.design.tsx"),
     route("analytics", "routes/app.analytics.tsx"),
     route("settings", "routes/app.settings.tsx"),
+    route("billing", "routes/app.billing.tsx"),
   ]),
   route("webhooks/app/uninstalled", "routes/webhooks.app.uninstalled.tsx"),
   route("webhooks/app/scopes_update", "routes/webhooks.app.scopes_update.tsx"),
