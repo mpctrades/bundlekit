@@ -156,11 +156,11 @@ the one-cent checkout bug that fills competitors' one-star reviews.
 
 ## Plans & billing
 
-Managed Pricing (Free / Pro / Plus, gated on offer count) is built —
+Managed Pricing (Free / Grow / Pro, gated on offer count) is built —
 `app/routes/app.billing.tsx`, `app/lib/billing.server.ts`. Two things still
 need doing outside this repo before it's live:
 
-1. Create the "Pro" and "Plus" plans in the Partner Dashboard (App setup >
+1. Create the "Grow" and "Pro" plans in the Partner Dashboard (App setup >
    Pricing), with names matching `app/lib/billing.server.ts`'s `PLANS`
    exactly — that name is the only link between a Shopify `AppSubscription`
    and a plan tier.

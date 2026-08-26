@@ -25,15 +25,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  free: ["Up to 2 offers", "Quantity discounts", "EN + FR storefront"],
-  pro: ["Up to 25 offers", "Everything in Free", "Full analytics dashboard", "14-day free trial"],
-  plus: ["Unlimited offers", "Everything in Pro", "Priority support", "14-day free trial"],
+  free: ["3 live offers", "Quantity discounts", "EN + FR storefront"],
+  grow: ["10 live offers", "Everything in Free", "Full analytics dashboard", "14-day free trial"],
+  pro: ["Unlimited offers", "Everything in Grow", "Priority support", "14-day free trial"],
 };
 
 const PLAN_PRICE: Record<PlanKey, string> = {
   free: "$0",
+  grow: "$4.99",
   pro: "$9.99",
-  plus: "$19.99",
 };
 
 export default function Billing() {

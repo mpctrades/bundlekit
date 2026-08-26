@@ -12,9 +12,9 @@
  * unlike the live GraphQL lookup in `billing.server.ts`.
  */
 export const PLANS = {
-  free: { key: "free", name: "Free", offerLimit: 2 },
-  pro: { key: "pro", name: "Pro", offerLimit: 25 },
-  plus: { key: "plus", name: "Plus", offerLimit: Infinity },
+  free: { key: "free", name: "Free", offerLimit: 3 },
+  grow: { key: "grow", name: "Grow", offerLimit: 10 },
+  pro: { key: "pro", name: "Pro", offerLimit: Infinity },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;
