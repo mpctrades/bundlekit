@@ -25,6 +25,20 @@ export interface StatTotals {
   revenue: number;
 }
 
+/** Orders as a share of widget views, and revenue per order — derived
+ *  rather than stored, so they stay consistent with whatever range/offer
+ *  slice the totals were computed over. Null when there's no denominator
+ *  yet, so callers can render an empty state instead of a bogus 0%/$0. */
+export function deriveRateMetrics(totals: { views: number; orders: number; revenue: number }): {
+  conversionRate: number | null;
+  aov: number | null;
+} {
+  return {
+    conversionRate: totals.views > 0 ? (totals.orders / totals.views) * 100 : null,
+    aov: totals.orders > 0 ? totals.revenue / totals.orders : null,
+  };
+}
+
 /** DB query — every OfferStat row for a shop across the last `days` days. */
 export async function fetchStatsForRange(shopId: string, days: number) {
   const since = new Date();

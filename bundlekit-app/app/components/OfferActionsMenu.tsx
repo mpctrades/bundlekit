@@ -84,6 +84,8 @@ export function OfferActionsMenu({ offerId, offerName, status, onEdit }: OfferAc
     },
   ];
 
+  const isLive = status === "live";
+
   return (
     <>
       <div onClick={(event) => event.stopPropagation()} style={{ position: "relative" }}>
@@ -104,28 +106,52 @@ export function OfferActionsMenu({ offerId, offerName, status, onEdit }: OfferAc
         </Popover>
       </div>
 
-      <Modal
-        open={confirmingDelete}
-        onClose={() => setConfirmingDelete(false)}
-        title="Delete this offer?"
-        primaryAction={{
-          content: "Delete offer",
-          destructive: true,
-          onAction: () => {
-            setConfirmingDelete(false);
-            submit("delete");
-          },
-        }}
-        secondaryActions={[{ content: "Cancel", onAction: () => setConfirmingDelete(false) }]}
-      >
-        <Modal.Section>
-          <div onClick={(event) => event.stopPropagation()}>
-            <Text as="p">
-              {`"${offerName}" and its discount will be removed from your store. Shoppers will no longer see this offer, and this can't be undone.`}
-            </Text>
-          </div>
-        </Modal.Section>
-      </Modal>
+      {isLive ? (
+        <Modal
+          open={confirmingDelete}
+          onClose={() => setConfirmingDelete(false)}
+          title="Pause this offer before deleting it"
+          primaryAction={{
+            content: "Pause offer",
+            onAction: () => {
+              setConfirmingDelete(false);
+              submit("pause");
+            },
+          }}
+          secondaryActions={[{ content: "Cancel", onAction: () => setConfirmingDelete(false) }]}
+        >
+          <Modal.Section>
+            <div onClick={(event) => event.stopPropagation()}>
+              <Text as="p">
+                {`"${offerName}" is live — shoppers can see and use it right now. Pause it first so the discount stops cleanly, then you can delete it.`}
+              </Text>
+            </div>
+          </Modal.Section>
+        </Modal>
+      ) : (
+        <Modal
+          open={confirmingDelete}
+          onClose={() => setConfirmingDelete(false)}
+          title="Delete this offer?"
+          primaryAction={{
+            content: "Delete offer",
+            destructive: true,
+            onAction: () => {
+              setConfirmingDelete(false);
+              submit("delete");
+            },
+          }}
+          secondaryActions={[{ content: "Cancel", onAction: () => setConfirmingDelete(false) }]}
+        >
+          <Modal.Section>
+            <div onClick={(event) => event.stopPropagation()}>
+              <Text as="p">
+                {`"${offerName}" and its performance history (views, orders, revenue) will be permanently removed. This can't be undone.`}
+              </Text>
+            </div>
+          </Modal.Section>
+        </Modal>
+      )}
     </>
   );
 }

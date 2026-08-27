@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Badge,
   Banner,
   BlockStack,
   Box,
   Button,
   ButtonGroup,
   Checkbox,
+  Collapsible,
+  ContextualSaveBar,
   EmptyState,
   InlineStack,
   Layout,
@@ -320,6 +323,38 @@ function fromDatetimeLocalValue(value: string): string {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
+/** The merchant-facing version of "couldn't load product names" — leads
+ *  with reassurance and one action, and puts the technical explanation
+ *  behind a disclosure instead of the headline. */
+function ProductAccessBanner({ shopDomain }: { shopDomain: string }) {
+  const [showDetail, setShowDetail] = useState(false);
+  return (
+    <Banner tone="warning" title="BundleKit needs updated product access">
+      <BlockStack gap="200">
+        <Text as="p">
+          Your offer is safe and still configured correctly. Update the app permissions so BundleKit can
+          display your Shopify product names again.
+        </Text>
+        <InlineStack gap="300" blockAlign="center">
+          <Button url={`https://${shopDomain}/admin/apps`} target="_blank">
+            Update permissions
+          </Button>
+          <Button variant="plain" onClick={() => setShowDetail((value) => !value)}>
+            {showDetail ? "Hide details" : "Learn more"}
+          </Button>
+        </InlineStack>
+        <Collapsible id="product-access-detail" open={showDetail}>
+          <Text as="p" tone="subdued" variant="bodySm">
+            BundleKit couldn't fetch product or collection names from Shopify right now — this usually means
+            the app needs an updated permission scope. Reinstalling or updating BundleKit from your Shopify
+            admin resolves it.
+          </Text>
+        </Collapsible>
+      </BlockStack>
+    </Banner>
+  );
+}
+
 export default function OfferBuilder() {
   const data = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -361,6 +396,69 @@ export default function OfferBuilder() {
   const [startsAtLocal, setStartsAtLocal] = useState(toDatetimeLocalValue(offer?.startsAt ?? null));
   const [endsAtLocal, setEndsAtLocal] = useState(toDatetimeLocalValue(offer?.endsAt ?? null));
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+
+  // Cheap enough to recompute every render — this is a handful of primitive
+  // fields, not the tier array's contents changing shape.
+  const snapshot = () =>
+    JSON.stringify({
+      name,
+      targetType,
+      targetIds: targetResources.map((resource) => resource.id).sort(),
+      tiers,
+      accent,
+      combineProduct,
+      combineOrder,
+      scheduleMode,
+      startsAtLocal,
+      endsAtLocal,
+    });
+  const baselineRef = useRef(snapshot());
+  const isDirty = snapshot() !== baselineRef.current;
+
+  useEffect(() => {
+    if (actionData && "ok" in actionData) {
+      baselineRef.current = snapshot();
+    }
+    // Reset the dirty baseline only when a save actually lands — not on every
+    // keystroke, which is what including `snapshot()`'s inputs here would do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
+
+  // Mirrors the server's own validation (app.offers.$id.tsx action, above) so
+  // a merchant sees the problem before round-tripping to find out — the
+  // server check stays authoritative and still runs regardless.
+  const clientErrors = useMemo(() => {
+    const errors: Partial<Record<"tiers" | "targetIds" | "schedule", string>> = {};
+    if (tiers.length === 0) {
+      errors.tiers = "Add at least one tier of two units or more.";
+    }
+    if (targetType !== "all" && targetResources.length === 0) {
+      errors.targetIds =
+        targetType === "collection"
+          ? "Select at least one collection for this offer."
+          : "Select at least one product for this offer.";
+    }
+    if (scheduleMode === "scheduled" && !startsAtLocal) {
+      errors.schedule = "Choose a start date and time, or switch back to starting immediately.";
+    } else if (startsAtLocal && endsAtLocal) {
+      const start = new Date(startsAtLocal);
+      const end = new Date(endsAtLocal);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end <= start) {
+        errors.schedule = "The end date must be after the start date.";
+      }
+    }
+    return errors;
+  }, [tiers, targetType, targetResources, scheduleMode, startsAtLocal, endsAtLocal]);
+  const hasBlockingErrors = Object.keys(clientErrors).length > 0;
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   if (limitReached || !offer) {
     return (
@@ -414,29 +512,48 @@ export default function OfferBuilder() {
     submit(form, { method: "post" });
   };
 
-  const fieldError = (field: string) => (actionData && "field" in actionData && actionData.field === field ? actionData.error : undefined);
+  const fieldError = (field: string) =>
+    clientErrors[field as keyof typeof clientErrors] ??
+    (actionData && "field" in actionData && actionData.field === field ? actionData.error : undefined);
+
+  const discard = () => {
+    if (!offer) return;
+    setName(offer.name ?? "");
+    setTargetType(offer.targetType ?? "products");
+    setTargetResources(offer.targetResources ?? []);
+    setTiers(offer.tiers ?? DEFAULT_TIERS);
+    setAccent(offer.accent ?? "#FF4A1C");
+    setCombineProduct(offer.combineProduct ?? false);
+    setCombineOrder(offer.combineOrder ?? false);
+    setScheduleMode(offer.startsAt ? "scheduled" : "immediate");
+    setStartsAtLocal(toDatetimeLocalValue(offer.startsAt ?? null));
+    setEndsAtLocal(toDatetimeLocalValue(offer.endsAt ?? null));
+  };
 
   return (
     <Page
       title={offer.id === "new" ? "New offer" : name}
       backAction={{ onAction: () => navigate("/app/offers") }}
-      titleMetadata={<StatusPill status={offer.displayStatus} />}
-      primaryAction={{ content: "Publish", loading: busy, onAction: () => save("publish") }}
-      secondaryActions={[{ content: "Save draft", onAction: () => save("save") }]}
+      titleMetadata={
+        <InlineStack gap="200" blockAlign="center">
+          <StatusPill status={offer.displayStatus} />
+          {isDirty ? <Badge tone="attention">Unsaved changes</Badge> : null}
+        </InlineStack>
+      }
+      primaryAction={{ content: "Publish", loading: busy, disabled: hasBlockingErrors, onAction: () => save("publish") }}
+      secondaryActions={[{ content: "Save draft", disabled: hasBlockingErrors, onAction: () => save("save") }]}
     >
+      {isDirty ? (
+        <ContextualSaveBar
+          message="Unsaved changes"
+          saveAction={{ content: "Save draft", loading: busy, disabled: hasBlockingErrors, onAction: () => save("save") }}
+          discardAction={{ content: "Discard", onAction: discard }}
+        />
+      ) : null}
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            {offer.resourceLoadError ? (
-              <Banner tone="warning" title="Couldn't load product names">
-                <p>
-                  Your targeting is still saved correctly, but BundleKit couldn't fetch product or
-                  collection names from Shopify right now — this usually means the app needs to be
-                  reinstalled to pick up a permission update. Reinstalling BundleKit from your
-                  Shopify admin will fix this.
-                </p>
-              </Banner>
-            ) : null}
+            {offer.resourceLoadError ? <ProductAccessBanner shopDomain={shopDomain} /> : null}
             {actionData && "error" in actionData && actionData.error ? (
               <Banner tone="critical" title="This offer was not published">
                 <p>{actionData.error}</p>
@@ -590,6 +707,11 @@ export default function OfferBuilder() {
                     + Add tier
                   </Button>
                 </InlineStack>
+                {fieldError("tiers") ? (
+                  <Text as="p" tone="critical" variant="bodySm">
+                    {fieldError("tiers")}
+                  </Text>
+                ) : null}
               </BlockStack>
             </Panel>
 

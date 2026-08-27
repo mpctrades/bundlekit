@@ -32,6 +32,7 @@ export default function App() {
           <Link to="/app/analytics">Analytics</Link>
           <Link to="/app/settings">Settings</Link>
           <Link to="/app/billing">Plans &amp; billing</Link>
+          <Link to="/app/help">Help &amp; support</Link>
         </NavMenu>
         <div style={{ background: PAGE_BACKGROUND, minHeight: "100vh" }}>
           <ToastProvider>

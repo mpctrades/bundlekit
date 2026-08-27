@@ -93,8 +93,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (intent === "duplicate") await duplicateOffer(offerId, shop.id);
     else if (intent === "pause") await pauseOffer(admin, offerId);
     else if (intent === "resume") await resumeOffer(admin, offerId);
-    else if (intent === "delete") await deleteOffer(admin, offerId, shop.id);
-    else return { error: `Unknown action "${intent}".` };
+    else if (intent === "delete") {
+      // Belt-and-suspenders: the menu already hides "Delete" behind a
+      // pause-first prompt for a live offer, but that's client-side — a
+      // direct POST (or a stale tab left open from before it went live)
+      // must not be able to pull a discount out from under active shoppers.
+      const offer = await prisma.offer.findFirstOrThrow({ where: { id: offerId, shopId: shop.id } });
+      if (computeDisplayStatus(offer, new Date()) === "live") {
+        return { error: "Pause this offer before deleting it — it's currently live on your storefront." };
+      }
+      await deleteOffer(admin, offerId, shop.id);
+    } else return { error: `Unknown action "${intent}".` };
   } catch (error) {
     return { error: friendlyErrorMessage(error) };
   }

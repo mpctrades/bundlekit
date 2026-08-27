@@ -45,6 +45,9 @@ type Pages = {
   "/app/billing": {
     params: {};
   };
+  "/app/help": {
+    params: {};
+  };
   "/webhooks/app/uninstalled": {
     params: {};
   };
@@ -65,7 +68,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/auth/login" | "/auth/*" | "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing" | "/webhooks/app/uninstalled" | "/webhooks/app/scopes_update" | "/webhooks/orders/create" | "/webhooks/compliance" | "/api/beacon";
+    page: "/" | "/auth/login" | "/auth/*" | "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing" | "/app/help" | "/webhooks/app/uninstalled" | "/webhooks/app/scopes_update" | "/webhooks/orders/create" | "/webhooks/compliance" | "/api/beacon";
   };
   "routes/_index.tsx": {
     id: "routes/_index";
@@ -81,7 +84,7 @@ type RouteFiles = {
   };
   "routes/app.tsx": {
     id: "routes/app";
-    page: "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing";
+    page: "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing" | "/app/help";
   };
   "routes/app._index.tsx": {
     id: "routes/app._index";
@@ -110,6 +113,10 @@ type RouteFiles = {
   "routes/app.billing.tsx": {
     id: "routes/app.billing";
     page: "/app/billing";
+  };
+  "routes/app.help.tsx": {
+    id: "routes/app.help";
+    page: "/app/help";
   };
   "routes/webhooks.app.uninstalled.tsx": {
     id: "routes/webhooks.app.uninstalled";
@@ -146,6 +153,7 @@ type RouteModules = {
   "routes/app.analytics": typeof import("./app/routes/app.analytics.tsx");
   "routes/app.settings": typeof import("./app/routes/app.settings.tsx");
   "routes/app.billing": typeof import("./app/routes/app.billing.tsx");
+  "routes/app.help": typeof import("./app/routes/app.help.tsx");
   "routes/webhooks.app.uninstalled": typeof import("./app/routes/webhooks.app.uninstalled.tsx");
   "routes/webhooks.app.scopes_update": typeof import("./app/routes/webhooks.app.scopes_update.tsx");
   "routes/webhooks.orders.create": typeof import("./app/routes/webhooks.orders.create.tsx");

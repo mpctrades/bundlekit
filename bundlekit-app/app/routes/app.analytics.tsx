@@ -1,4 +1,6 @@
-import { BlockStack, ButtonGroup, Button, IndexTable, InlineGrid, Page, Text } from "@shopify/polaris";
+import { useMemo, useState } from "react";
+import { BlockStack, Box, ButtonGroup, Button, IndexTable, InlineGrid, Page, Text } from "@shopify/polaris";
+import type { IndexTableProps } from "@shopify/polaris";
 import { CashDollarIcon, CheckCircleIcon, OrderIcon, ViewIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
@@ -34,10 +36,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion", "revenue"] as const;
+type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
+
 export default function Analytics() {
   const { days, currency, accent, totals, buckets, perOffer } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [sortColumnIndex, setSortColumnIndex] = useState(5); // Revenue, matching the server's default order
+  const [sortDirection, setSortDirection] = useState<IndexTableProps["sortDirection"]>("descending");
+
+  const perOfferWithConversion = useMemo(
+    () => perOffer.map((offer) => ({ ...offer, conversion: offer.views > 0 ? (offer.orders / offer.views) * 100 : null })),
+    [perOffer],
+  );
+
+  const sortedOffers = useMemo(() => {
+    const column: OfferTableColumn = OFFER_TABLE_COLUMNS[sortColumnIndex] ?? "revenue";
+    const direction = sortDirection === "ascending" ? 1 : -1;
+    return [...perOfferWithConversion].sort((a, b) => {
+      if (column === "name") return direction * a.name.localeCompare(b.name);
+      const aValue = a[column] ?? -1;
+      const bValue = b[column] ?? -1;
+      return direction * (aValue - bValue);
+    });
+  }, [perOfferWithConversion, sortColumnIndex, sortDirection]);
+
+  const handleSort = (headingIndex: number, direction: IndexTableProps["sortDirection"]) => {
+    setSortColumnIndex(headingIndex);
+    setSortDirection(direction);
+  };
 
   const cards = [
     { label: `Revenue (${days}d)`, value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060" },
@@ -138,37 +166,50 @@ export default function Analytics() {
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.3 }}>
           <Panel padding="0px">
-            <IndexTable
-              resourceName={{ singular: "offer", plural: "offers" }}
-              itemCount={perOffer.length}
-              selectable={false}
-              headings={[
-                { title: "Offer" },
-                { title: "Views" },
-                { title: "Selects" },
-                { title: "Orders" },
-                { title: "Revenue" },
-              ]}
-              emptyState={
-                <BlockStack gap="200" inlineAlign="center">
-                  <Text as="p" tone="subdued">
-                    No activity yet. Make sure at least one offer is Live and the BundleKit theme block is installed.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              {perOffer.map((offer, index) => (
-                <IndexTable.Row id={offer.offerId} key={offer.offerId} position={index}>
-                  <IndexTable.Cell>
-                    <Link to={`/app/offers/${offer.offerId}`}>{offer.name}</Link>
-                  </IndexTable.Cell>
-                  <IndexTable.Cell>{offer.views}</IndexTable.Cell>
-                  <IndexTable.Cell>{offer.selects}</IndexTable.Cell>
-                  <IndexTable.Cell>{offer.orders}</IndexTable.Cell>
-                  <IndexTable.Cell>{formatMoney(offer.revenue, currency)}</IndexTable.Cell>
-                </IndexTable.Row>
-              ))}
-            </IndexTable>
+            <BlockStack gap="0">
+              <Box padding="400" paddingBlockEnd="0">
+                <Text as="h2" variant="headingMd">
+                  Offer performance
+                </Text>
+              </Box>
+              <IndexTable
+                resourceName={{ singular: "offer", plural: "offers" }}
+                itemCount={sortedOffers.length}
+                selectable={false}
+                sortable={[true, true, true, true, true, true]}
+                sortDirection={sortDirection}
+                sortColumnIndex={sortColumnIndex}
+                onSort={handleSort}
+                headings={[
+                  { title: "Offer" },
+                  { title: "Views" },
+                  { title: "Selects" },
+                  { title: "Orders" },
+                  { title: "Conversion" },
+                  { title: "Revenue" },
+                ]}
+                emptyState={
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="p" tone="subdued">
+                      No activity yet. Make sure at least one offer is Live and the BundleKit theme block is installed.
+                    </Text>
+                  </BlockStack>
+                }
+              >
+                {sortedOffers.map((offer, index) => (
+                  <IndexTable.Row id={offer.offerId} key={offer.offerId} position={index}>
+                    <IndexTable.Cell>
+                      <Link to={`/app/offers/${offer.offerId}`}>{offer.name}</Link>
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>{offer.views}</IndexTable.Cell>
+                    <IndexTable.Cell>{offer.selects}</IndexTable.Cell>
+                    <IndexTable.Cell>{offer.orders}</IndexTable.Cell>
+                    <IndexTable.Cell>{offer.conversion === null ? "—" : `${offer.conversion.toFixed(1)}%`}</IndexTable.Cell>
+                    <IndexTable.Cell>{formatMoney(offer.revenue, currency)}</IndexTable.Cell>
+                  </IndexTable.Row>
+                ))}
+              </IndexTable>
+            </BlockStack>
           </Panel>
         </motion.div>
       </BlockStack>

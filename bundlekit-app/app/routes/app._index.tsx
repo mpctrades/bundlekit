@@ -1,12 +1,12 @@
-import { BlockStack, Box, Button, EmptyState, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
-import { CashDollarIcon, LiveIcon, OrderIcon, ViewIcon } from "@shopify/polaris-icons";
+import { BlockStack, Box, Button, EmptyState, Icon, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
+import { CashDollarIcon, ChartVerticalIcon, LiveIcon, OrderIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { useLoaderData, useNavigate } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
-import { bucketByDay, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
+import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
 import { findFunctionId } from "../lib/offers.server";
 import { formatMoney } from "../lib/format";
 import { Chart } from "../components/Chart";
@@ -47,6 +47,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     functionDeployed = false;
   }
 
+  const totals = totalStats(rows);
+
   return {
     shopDomain: session.shop,
     currency,
@@ -54,7 +56,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     offerCount,
     liveCount,
     functionDeployed,
-    totals: totalStats(rows),
+    totals,
+    rates: deriveRateMetrics(totals),
     buckets: bucketByDay(rows, 30),
     topOffers: summarizeByOffer(rows).slice(0, 5),
     greeting: greeting(new Date().getHours()),
@@ -70,6 +73,7 @@ export default function Dashboard() {
     liveCount,
     functionDeployed,
     totals,
+    rates,
     buckets,
     topOffers,
     greeting: timeGreeting,
@@ -79,14 +83,15 @@ export default function Dashboard() {
   const themeEditor = `https://${shopDomain}/admin/themes/current/editor?template=product`;
 
   const healthChecks = [
-    { label: "Function active", done: functionDeployed },
-    { label: "Offer published", done: liveCount > 0 },
-    { label: "Theme block added", done: false, manual: true },
+    { label: "Publish an offer", done: liveCount > 0 },
+    { label: "Activate automatic discounts", done: functionDeployed },
+    { label: "Add BundleKit to your product page", done: false, manual: true },
   ];
   const doneCount = healthChecks.filter((item) => item.done).length;
   const allHealthy = doneCount === healthChecks.length;
   const nextStep = healthChecks.find((item) => !item.done);
   const hasRevenueData = totals.revenue > 0 || totals.orders > 0;
+  const { conversionRate, aov } = rates;
 
   if (offerCount === 0) {
     return (
@@ -112,15 +117,29 @@ export default function Dashboard() {
   }
 
   const cards = [
-    { label: "Revenue (30d)", value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060", onClick: () => navigate("/app/analytics") },
-    { label: "Orders (30d)", value: totals.orders, format: (v: number) => String(Math.round(v)), icon: OrderIcon, tint: "#5C6AC4", onClick: () => navigate("/app/analytics") },
-    { label: "Widget views (30d)", value: totals.views, format: (v: number) => String(Math.round(v)), icon: ViewIcon, tint: "#006FBB", onClick: () => navigate("/app/analytics") },
-    { label: "Live offers", value: liveCount, format: (v: number) => `${Math.round(v)} / ${offerCount}`, icon: LiveIcon, tint: accent, onClick: () => navigate("/app/offers") },
+    { label: "Bundle revenue (30d)", value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060", onClick: () => navigate("/app/analytics") },
+    { label: "Bundle orders (30d)", value: totals.orders, format: (v: number) => String(Math.round(v)), icon: OrderIcon, tint: "#5C6AC4", onClick: () => navigate("/app/analytics") },
+    {
+      label: "Conversion rate (30d)",
+      value: conversionRate ?? 0,
+      format: (v: number) => (conversionRate === null ? "—" : `${v.toFixed(1)}%`),
+      icon: ChartVerticalIcon,
+      tint: "#006FBB",
+      onClick: () => navigate("/app/analytics"),
+    },
+    {
+      label: "Avg. order value (30d)",
+      value: aov ?? 0,
+      format: (v: number) => (aov === null ? "—" : formatMoney(v, currency)),
+      icon: CashDollarIcon,
+      tint: accent,
+      onClick: () => navigate("/app/analytics"),
+    },
   ];
 
   const checklistLinks: Partial<Record<string, () => void>> = {
-    "Offer published": () => navigate("/app/offers"),
-    "Theme block added": () => window.open(themeEditor, "_blank"),
+    "Publish an offer": () => navigate("/app/offers"),
+    "Add BundleKit to your product page": () => window.open(themeEditor, "_blank"),
   };
 
   return (
@@ -136,6 +155,25 @@ export default function Dashboard() {
             </Button>
           }
         />
+
+        <InlineStack gap="200" blockAlign="center">
+          <Box
+            background={liveCount > 0 ? "bg-fill-success-secondary" : "bg-fill-secondary"}
+            borderRadius="full"
+            paddingInline="300"
+            paddingBlock="100"
+          >
+            <InlineStack gap="150" blockAlign="center">
+              <Icon source={LiveIcon} tone={liveCount > 0 ? "success" : "subdued"} />
+              <Text as="span" variant="bodySm" fontWeight="medium">
+                {liveCount} of {offerCount} offer{offerCount === 1 ? "" : "s"} live
+              </Text>
+            </InlineStack>
+          </Box>
+          <Button variant="plain" onClick={() => navigate("/app/offers")}>
+            View offers
+          </Button>
+        </InlineStack>
 
         <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
           {cards.map((card, index) => (
@@ -187,47 +225,30 @@ export default function Dashboard() {
               <Panel>
                 <BlockStack gap="300">
                   <InlineStack align="space-between" blockAlign="center">
-                    <BlockStack gap="050">
-                      <Text as="h2" variant="headingMd">
-                        BundleKit Health
-                      </Text>
-                      <Text as="p" tone="subdued" variant="bodySm">
-                        Everything BundleKit needs to sell
-                      </Text>
-                    </BlockStack>
+                    <Text as="h2" variant="headingMd">
+                      BundleKit setup
+                    </Text>
                     {!allHealthy ? (
                       <Box background="bg-fill-caution-secondary" borderRadius="full" paddingInline="300" paddingBlock="100">
                         <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {doneCount}/{healthChecks.length}
+                          {doneCount} of {healthChecks.length} complete
                         </Text>
                       </Box>
                     ) : null}
                   </InlineStack>
 
                   {allHealthy ? (
-                    <InlineStack gap="300" blockAlign="center" wrap={false}>
-                      <div
-                        style={{
-                          width: 28,
-                          height: 28,
-                          minWidth: 28,
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          background: "rgba(0,128,96,0.12)",
-                        }}
-                      >
-                        <span style={{ width: 15, height: 15, display: "inline-flex" }}>
-                          <svg viewBox="0 0 20 20" fill="none" style={{ width: "100%", height: "100%" }}>
-                            <path d="M4 10l4 4 8-8" stroke="#008060" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </span>
-                      </div>
-                      <Text as="span" variant="bodyMd" fontWeight="semibold">
-                        BundleKit is ready ✓
+                    <BlockStack gap="200">
+                      <InlineStack gap="300" blockAlign="center" wrap={false}>
+                        <Text as="span" variant="headingMd">🎉</Text>
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          BundleKit is ready to sell
+                        </Text>
+                      </InlineStack>
+                      <Text as="p" tone="subdued" variant="bodySm">
+                        Your offers are active on your storefront.
                       </Text>
-                    </InlineStack>
+                    </BlockStack>
                   ) : (
                     <BlockStack gap="300">
                       {healthChecks.map((item) => {
@@ -282,31 +303,22 @@ export default function Dashboard() {
                       })}
 
                       {nextStep ? (
-                        <Box background="bg-fill-caution-secondary" borderRadius="200" padding="300">
-                          <BlockStack gap="200">
-                            <Text as="p" variant="bodySm">
-                              {nextStep.label === "Function active"
-                                ? "BundleKit isn't ready yet. Deploy the discount Function to continue."
-                                : nextStep.label === "Offer published"
-                                  ? "BundleKit is almost ready. Publish an offer to start selling."
-                                  : "BundleKit is almost ready. Add the BundleKit block to your product template."}
-                            </Text>
-                            {nextStep.label === "Theme block added" ? (
-                              <Button url={themeEditor} target="_blank">
-                                Add BundleKit to theme
-                              </Button>
-                            ) : nextStep.label === "Offer published" ? (
-                              <Button onClick={() => navigate("/app/offers")}>Go to offers</Button>
-                            ) : null}
-                          </BlockStack>
-                        </Box>
+                        <Button
+                          variant="primary"
+                          fullWidth
+                          onClick={
+                            nextStep.label === "Publish an offer"
+                              ? () => navigate("/app/offers")
+                              : nextStep.label === "Add BundleKit to your product page"
+                                ? () => window.open(themeEditor, "_blank")
+                                : () => navigate("/app/help")
+                          }
+                        >
+                          Continue setup
+                        </Button>
                       ) : null}
                     </BlockStack>
                   )}
-
-                  <Button url={themeEditor} target="_blank" fullWidth>
-                    Open the theme editor
-                  </Button>
                 </BlockStack>
               </Panel>
             </motion.div>

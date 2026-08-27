@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketByDay, summarizeByOffer, totalStats } from "./stats.server";
+import { bucketByDay, deriveRateMetrics, summarizeByOffer, totalStats } from "./stats.server";
 
 function stat(day: string, offer: { id: string; name: string; status: string }, values: Partial<{ views: number; selects: number; orders: number; revenue: number }> = {}) {
   return {
@@ -66,5 +66,19 @@ describe("totalStats", () => {
 
   it("returns all zeros for an empty range", () => {
     expect(totalStats([])).toEqual({ views: 0, selects: 0, orders: 0, revenue: 0 });
+  });
+});
+
+describe("deriveRateMetrics", () => {
+  it("computes conversion rate and AOV from totals", () => {
+    expect(deriveRateMetrics({ views: 200, orders: 8, revenue: 800 })).toEqual({ conversionRate: 4, aov: 100 });
+  });
+
+  it("returns null instead of dividing by zero when there's no data yet", () => {
+    expect(deriveRateMetrics({ views: 0, orders: 0, revenue: 0 })).toEqual({ conversionRate: null, aov: null });
+  });
+
+  it("keeps a real 0% conversion distinct from no data", () => {
+    expect(deriveRateMetrics({ views: 50, orders: 0, revenue: 0 }).conversionRate).toBe(0);
   });
 });
