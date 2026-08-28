@@ -1,6 +1,6 @@
 # BundleKit Privacy Policy
 
-*Draft — review before publishing. Last drafted: August 25, 2026.*
+*Published at bundlekit-web/privacy.html. Last updated: August 28, 2026.*
 
 This policy describes how BundleKit ("the app"), provided by MPC Trades,
 handles data when a merchant installs it on a Shopify store.
@@ -49,28 +49,20 @@ data for advertising.
 
 ## Security
 
-Data is transmitted over HTTPS/TLS. [Confirm and describe at-rest encryption
-for your production database here once verified with your hosting
-provider.]
+Data is transmitted over HTTPS/TLS.
 
 ## Your rights
 
 Shopify merchants and their customers can request data access or deletion
 per Shopify's standard data subject request process. We support Shopify's
-mandatory compliance webhooks (`shop/redact`, and — once approved for
-protected customer data access — `customers/data_request` and
-`customers/redact`).
+mandatory compliance webhooks: `customers/data_request`, `customers/redact`,
+and `shop/redact`.
 
 ## Contact
 
-Questions about this policy: team@mapetitecoree.com
+Questions about this policy: team@mpctrades.com
 
 ## Changes
 
 We'll update this policy as the app's data use changes and note the date at
 the top.
-
----
-**Before publishing**: have this reviewed by whoever handles legal/compliance
-for MPC Trades, and fill in the at-rest encryption line once you've confirmed
-it with your database host.

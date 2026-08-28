@@ -2,7 +2,7 @@
 
 client_id = "a8858b880781d71586cdb9d118edf02c"
 name = "BundleKit"
-application_url = "https://example.com"
+application_url = "https://bundlekit.mpctrades.com"
 embedded = true
 
 [access_scopes]
@@ -13,9 +13,9 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://example.com/auth/callback",
-  "https://example.com/auth/shopify/callback",
-  "https://example.com/api/auth/callback"
+  "https://bundlekit.mpctrades.com/auth/callback",
+  "https://bundlekit.mpctrades.com/auth/shopify/callback",
+  "https://bundlekit.mpctrades.com/api/auth/callback"
 ]
 
 [webhooks]
@@ -30,7 +30,7 @@ api_version = "2026-07"
   uri = "/webhooks/app/scopes_update"
 
   [[webhooks.subscriptions]]
-  compliance_topics = [ "shop/redact" ]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   uri = "/webhooks/compliance"
 
 [pos]
@@ -38,4 +38,3 @@ embedded = false
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true

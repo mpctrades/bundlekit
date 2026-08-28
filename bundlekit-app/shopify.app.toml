@@ -39,20 +39,15 @@ api_version = "2026-07"
   # topics = [ "orders/create" ]
   # uri = "/webhooks/orders/create"
 
-  # customers/data_request and customers/redact require Protected Customer
-  # Data approval (Partner Dashboard > App setup > Protected customer data)
-  # before Shopify will let the CLI register them. Not yet requested for this
-  # app, so they're commented out to unblock local dev — restore both before
-  # any real deploy; the /webhooks/compliance handler already supports all
-  # three topics (app/routes/webhooks.compliance.tsx).
+  # All three mandatory GDPR compliance webhooks. These are required for App
+  # Store review regardless of whether the app stores customer data — the
+  # /webhooks/compliance handler already supports all three topics
+  # (app/routes/webhooks.compliance.tsx) as honest no-ops for data_request
+  # and customers/redact, and a real delete for shop/redact.
   # See https://shopify.dev/docs/apps/launch/protected-customer-data
   [[webhooks.subscriptions]]
-  compliance_topics = [ "shop/redact" ]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   uri = "/webhooks/compliance"
-
-  # [[webhooks.subscriptions]]
-  # compliance_topics = [ "customers/data_request", "customers/redact" ]
-  # uri = "/webhooks/compliance"
 
 [pos]
 embedded = false

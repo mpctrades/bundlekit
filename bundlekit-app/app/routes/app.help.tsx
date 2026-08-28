@@ -73,8 +73,9 @@ function useTopics(themeEditor: string): Topic[] {
       title: "Discount stacking",
       body: (
         <Text as="p">
-          By default, BundleKit's discount can combine with other product and order discounts you run. You
-          can change these defaults, or override them per offer, from the offer builder and from Settings.
+          By default, BundleKit's discount does not combine with other product or order discounts you run
+          (it does combine with shipping discounts). You can change these defaults, or override them per
+          offer, from the offer builder and from Settings.
         </Text>
       ),
     },
