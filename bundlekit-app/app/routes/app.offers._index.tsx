@@ -21,7 +21,7 @@ import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { OfferActionsMenu } from "../components/OfferActionsMenu";
-import { BRAND_ACCENT } from "../lib/theme";
+import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
 
 function summarizeDiscount(config: OfferConfig): string {
   if (config.kind === "companion" && config.companionDiscount) {
@@ -125,7 +125,7 @@ export default function OffersIndex() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
 
-  const themeEditor = `https://${shopDomain}/admin/themes/current/editor?template=product&addAppBlockId=BUNDLEKIT_BLOCK_ID/bundlekit&target=mainSection`;
+  const themeEditor = themeEditorDeepLink(shopDomain);
 
   const filtered = useMemo(
     () =>

@@ -42,6 +42,7 @@ import {
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
 import { getActivePlan } from "../lib/billing.server";
 import { getOfferLimit } from "../lib/billing";
+import { themeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
@@ -837,7 +838,7 @@ export default function OfferBuilder() {
                     template. You place it once, for all products.
                   </Text>
                   <Button
-                    url={`https://${shopDomain}/admin/themes/current/editor?template=product`}
+                    url={themeEditorDeepLink(shopDomain)}
                     target="_blank"
                   >
                     Open the theme editor

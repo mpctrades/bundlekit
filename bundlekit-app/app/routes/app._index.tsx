@@ -6,6 +6,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
+import { themeEditorDeepLink } from "../lib/theme";
 import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
 import { findFunctionId } from "../lib/offers.server";
 import { formatMoney } from "../lib/format";
@@ -24,28 +25,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const shop = await getOrCreateShop(session.shop);
 
-  // Best-effort: the store's real currency, not the schema default. Never
-  // let a sync hiccup block the dashboard from loading.
-  const syncedCurrency = await syncShopInfo(admin, shop.id).catch((error) => {
-    console.warn("[bundlekit] shop info sync failed", error);
-    return undefined;
-  });
-  const currency = syncedCurrency ?? shop.currency;
-
-  const [offerCount, liveCount, rows] = await Promise.all([
+  // Everything below is independent — same shop, same admin session, no
+  // step's result feeds another's input — so it all runs as one round trip
+  // instead of four chained ones. That used to be the dashboard's biggest
+  // latency cost: two live Admin API calls awaited back-to-back before the
+  // page could even start rendering.
+  const [syncedCurrency, offerCount, liveCount, rows, functionDeployed] = await Promise.all([
+    // Best-effort: the store's real currency, not the schema default. Never
+    // let a sync hiccup block the dashboard from loading.
+    syncShopInfo(admin, shop.id).catch((error) => {
+      console.warn("[bundlekit] shop info sync failed", error);
+      return undefined;
+    }),
     prisma.offer.count({ where: { shopId: shop.id } }),
     prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
     fetchStatsForRange(shop.id, 30),
+    // findFunctionId throws when no Function is deployed yet — correct for a
+    // real publish, but this is only a health check, so reduce to a boolean.
+    findFunctionId(admin).then(
+      () => true,
+      () => false,
+    ),
   ]);
-
-  // findFunctionId throws when no Function is deployed yet — correct for a
-  // real publish, but this is only a health check, so reduce to a boolean.
-  let functionDeployed = true;
-  try {
-    await findFunctionId(admin);
-  } catch {
-    functionDeployed = false;
-  }
+  const currency = syncedCurrency ?? shop.currency;
 
   const totals = totalStats(rows);
 
@@ -80,7 +82,7 @@ export default function Dashboard() {
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  const themeEditor = `https://${shopDomain}/admin/themes/current/editor?template=product`;
+  const themeEditor = themeEditorDeepLink(shopDomain);
 
   const healthChecks = [
     { label: "Publish an offer", done: liveCount > 0 },

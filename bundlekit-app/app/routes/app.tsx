@@ -21,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   return (
-    <AppProvider embedded apiKey={apiKey}>
+    <AppProvider apiKey={apiKey}>
       {/* Polaris React components (Page, Card, ...) need their own i18n
           provider — the AppProvider above only wires up App Bridge. */}
       <PolarisAppProvider i18n={polarisTranslations} linkComponent={PolarisRouterLink}>
