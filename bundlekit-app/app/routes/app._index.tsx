@@ -8,7 +8,7 @@ import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
 import { themeEditorDeepLink } from "../lib/theme";
 import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
-import { findFunctionId } from "../lib/offers.server";
+import { getFunctionId } from "../lib/offers.server";
 import { formatMoney } from "../lib/format";
 import { Chart } from "../components/Chart";
 import { KpiCard } from "../components/KpiCard";
@@ -40,9 +40,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     prisma.offer.count({ where: { shopId: shop.id } }),
     prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
     fetchStatsForRange(shop.id, 30),
-    // findFunctionId throws when no Function is deployed yet — correct for a
+    // getFunctionId throws when no Function is deployed yet — correct for a
     // real publish, but this is only a health check, so reduce to a boolean.
-    findFunctionId(admin).then(
+    // Cached on shop.functionId after the first successful lookup, so this
+    // skips the Admin API round trip entirely on every load thereafter.
+    getFunctionId(admin, shop).then(
       () => true,
       () => false,
     ),

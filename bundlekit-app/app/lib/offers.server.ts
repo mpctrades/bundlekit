@@ -329,6 +329,19 @@ export async function findFunctionId(admin: AdminApiContext): Promise<string> {
   return match.id;
 }
 
+/** A Function's id is stable for the life of the extension, so once found
+ *  it's cached on the Shop row — sparing every future dashboard load and
+ *  publish a full Admin API round trip just to re-discover the same id. */
+export async function getFunctionId(
+  admin: AdminApiContext,
+  shop: { id: string; functionId: string | null },
+): Promise<string> {
+  if (shop.functionId) return shop.functionId;
+  const functionId = await findFunctionId(admin);
+  await prisma.shop.update({ where: { id: shop.id }, data: { functionId } }).catch(() => {});
+  return functionId;
+}
+
 /**
  * One discount per offer. Its config metafield carries the tiers, so the
  * Function needs no database and no network at checkout time.
@@ -454,7 +467,10 @@ export async function publishOffer(
   // Null startsAt means "start immediately" (F9).
   schedule: { startsAt: Date | null; endsAt: Date | null } = { startsAt: null, endsAt: null },
 ) {
-  const offer = await prisma.offer.findUniqueOrThrow({ where: { id: offerId } });
+  const offer = await prisma.offer.findUniqueOrThrow({
+    where: { id: offerId },
+    include: { shop: { select: { functionId: true } } },
+  });
   const config = offer.config as unknown as OfferConfig;
   const startsAt = schedule.startsAt ?? new Date();
 
@@ -463,7 +479,7 @@ export async function publishOffer(
   const [, productIds, functionId] = await Promise.all([
     ensureMetafieldDefinition(admin),
     preResolvedProductIds ?? resolveTargetProducts(admin, offer.targetType, offer.targetIds),
-    findFunctionId(admin),
+    getFunctionId(admin, { id: offer.shopId, functionId: offer.shop.functionId }),
   ]);
 
   await writeOfferToProducts(admin, productIds, config);
