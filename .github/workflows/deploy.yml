@@ -1,0 +1,89 @@
+# Deploys the bundlekit-app web backend to the VPS on every push to main
+# that touches bundlekit-app/. (This repo is a monorepo — bundlekit-web,
+# the static marketing site, is not covered by this workflow.)
+#
+# One-time setup required (Repo → Settings → Secrets and variables → Actions):
+#   Secrets:
+#     DEPLOY_HOST      - server hostname/IP (e.g. bundlekit.mpctrades.com)
+#     DEPLOY_USER      - SSH user (e.g. devteam02)
+#     DEPLOY_SSH_KEY   - private key for a deploy-only key added to the
+#                        server's ~/.ssh/authorized_keys (do NOT reuse a
+#                        personal key)
+#     DEPLOY_PORT      - optional, defaults to 22
+#   Variables (optional overrides; sensible defaults are baked in below):
+#     BUNDLEKIT_REPO_PATH - absolute path to the repo ROOT on the server,
+#                            i.e. the parent of bundlekit-app/ and
+#                            bundlekit-web/ (default: $HOME/apps/bundlekit)
+#     BUNDLEKIT_PM2_NAME  - pm2 process name (default: bundlekit)
+#
+# The server checkout must already have its own untracked .env inside
+# bundlekit-app/ with the real secrets (SHOPIFY_API_KEY, SHOPIFY_API_SECRET,
+# DATABASE_URL, ...) — this workflow only pulls code, runs migrations,
+# builds, and restarts the existing pm2 process (starting it if it isn't
+# running yet).
+name: Deploy bundlekit-app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bundlekit-app/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-bundlekit-app
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: Build, typecheck & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bundlekit-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: bundlekit-app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test
+
+  deploy:
+    name: Deploy to server
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Pull, migrate, build, and restart over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            cd "${{ vars.BUNDLEKIT_REPO_PATH || '$HOME/apps/bundlekit' }}"
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            cd bundlekit-app
+            npm ci
+            npm run setup   # prisma generate && prisma migrate deploy
+            npm run build
+
+            APP_NAME="${{ vars.BUNDLEKIT_PM2_NAME || 'bundlekit' }}"
+            if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+              pm2 restart "$APP_NAME" --update-env
+            else
+              pm2 start npm --name "$APP_NAME" -- run start
+            fi
+            pm2 save
+
+            echo "Deployed $(git rev-parse --short HEAD)"
