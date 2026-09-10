@@ -24,6 +24,14 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+  // Required once `future.expiringOfflineAccessTokens` is enabled (see
+  // app/shopify.server.ts): the installed @shopify/shopify-app-session-storage-prisma
+  // unconditionally writes these two fields on every storeSession() call.
+  // Without them, every token-exchange / OAuth session write throws
+  // "Unknown argument `refreshToken`" and /app 500s for every merchant,
+  // review-bot installs included — confirmed in production logs.
+  refreshToken        String?
+  refreshTokenExpires DateTime?
 }
 
 model Shop {
