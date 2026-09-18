@@ -1,6 +1,5 @@
 import { redirect, type LoaderFunctionArgs } from "react-router";
 import { motion } from "motion/react";
-import { login } from "../shopify.server";
 import { Logo } from "../components/Logo";
 import { BRAND_ACCENT, PAGE_BACKGROUND } from "../lib/theme";
 
@@ -9,7 +8,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (url.searchParams.get("shop")) {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
-  return { showForm: Boolean(login) };
+  return null;
 };
 
 const FEATURES = [
@@ -32,24 +31,6 @@ export default function Index() {
         padding: 24,
       }}
     >
-      <style>{`
-        .bk-shop-input:focus {
-          outline: none;
-          border-color: ${BRAND_ACCENT};
-          box-shadow: 0 0 0 3px rgba(255, 74, 28, 0.14);
-        }
-        .bk-login-btn {
-          transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-        }
-        .bk-login-btn:hover {
-          background: #2b2b2b;
-          box-shadow: 0 6px 16px -4px rgba(26, 26, 26, 0.35);
-        }
-        .bk-login-btn:active {
-          transform: translateY(1px);
-        }
-      `}</style>
-
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -115,59 +96,22 @@ export default function Index() {
             </p>
           </div>
 
-          <form
-            method="post"
-            action="/auth/login"
-            style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          <p
+            style={{
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "#4a4a4a",
+              textAlign: "center",
+              margin: 0,
+              padding: "16px 4px",
+              background: "#FAF9F6",
+              borderRadius: 12,
+              border: "1px solid #EFEBE2",
+            }}
           >
-            <label style={{ display: "block" }}>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#1a1a1a",
-                  marginBottom: 6,
-                }}
-              >
-                Shop domain
-              </span>
-              <input
-                type="text"
-                name="shop"
-                placeholder="my-shop.myshopify.com"
-                autoComplete="on"
-                className="bk-shop-input"
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  fontSize: 15,
-                  padding: "11px 14px",
-                  borderRadius: 10,
-                  border: "1px solid #DCD8CF",
-                  background: "#FAF9F6",
-                  color: "#1a1a1a",
-                }}
-              />
-            </label>
-            <button
-              type="submit"
-              className="bk-login-btn"
-              style={{
-                width: "100%",
-                fontSize: 15,
-                fontWeight: 600,
-                color: "#fff",
-                background: "#1a1a1a",
-                border: "none",
-                borderRadius: 10,
-                padding: "12px 16px",
-                cursor: "pointer",
-              }}
-            >
-              Log in
-            </button>
-          </form>
+            Install BundleKit from the Shopify App Store, or open it from
+            <strong> Apps → BundleKit</strong> in your Shopify admin.
+          </p>
 
           <div
             style={{
