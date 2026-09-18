@@ -8,7 +8,10 @@ bundlekit-app/extensions/*/dist/
 
 # Shopify Function build artifacts (regenerate via `npm run build` in the extension)
 bundlekit-app/extensions/*/generated/
-bundlekit-app/extensions/*/schema.graphql
+
+# schema.graphql is a build INPUT (introspected per api_version), not an
+# output — `shopify app function build`'s codegen step reads it from disk
+# and does not regenerate it, so it must stay committed for CI to build.
 
 # Env files (never commit real secrets)
 .env
