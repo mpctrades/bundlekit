@@ -42,7 +42,7 @@ import {
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
 import { getActivePlan } from "../lib/billing.server";
 import { getOfferLimit } from "../lib/billing";
-import { themeEditorDeepLink } from "../lib/theme";
+import { BORDER, BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
@@ -622,33 +622,48 @@ export default function OfferBuilder() {
 
                 <BlockStack gap="300">
                   {tiers.map((tier, index) => (
-                    <Box
+                    <div
                       key={index}
-                      padding="300"
-                      borderWidth="025"
-                      borderColor="border"
-                      borderRadius="200"
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        border: tier.badge ? `2px solid ${BRAND_ACCENT}` : `1px solid ${BORDER}`,
+                        background: tier.badge ? "rgba(255,90,31,0.04)" : "transparent",
+                      }}
                     >
                       <BlockStack gap="200">
                         <InlineStack align="space-between" blockAlign="center" wrap={false}>
-                          <InlineStack gap="150" blockAlign="center" wrap={false}>
-                            <Text as="span" variant="bodyMd">Buy</Text>
-                            <Box width="70px">
-                              <TextField
-                                label="Quantity"
-                                labelHidden
-                                type="number"
-                                min={2}
-                                value={String(tier.quantity)}
-                                onChange={(value) => update(index, { quantity: Number(value) })}
-                                autoComplete="off"
-                              />
-                            </Box>
-                            <Text as="span" variant="bodyMd">or more</Text>
+                          <InlineStack gap="200" blockAlign="center" wrap={false}>
+                            <Text as="span" variant="bodySm" fontWeight="semibold" tone="subdued">
+                              Tier {index + 1}
+                            </Text>
+                            {tier.badge ? (
+                              <Box background="bg-fill-caution-secondary" borderRadius="full" paddingInline="200" paddingBlock="050">
+                                <Text as="span" variant="bodySm" fontWeight="semibold">
+                                  Most popular
+                                </Text>
+                              </Box>
+                            ) : null}
                           </InlineStack>
                           <Button variant="plain" tone="critical" onClick={() => setTiers((current) => current.filter((_, i) => i !== index))}>
                             Remove
                           </Button>
+                        </InlineStack>
+
+                        <InlineStack gap="150" blockAlign="center" wrap={false}>
+                          <Text as="span" variant="bodyMd">Buy</Text>
+                          <Box width="70px">
+                            <TextField
+                              label="Quantity"
+                              labelHidden
+                              type="number"
+                              min={2}
+                              value={String(tier.quantity)}
+                              onChange={(value) => update(index, { quantity: Number(value) })}
+                              autoComplete="off"
+                            />
+                          </Box>
+                          <Text as="span" variant="bodyMd">or more</Text>
                         </InlineStack>
 
                         <InlineStack gap="150" blockAlign="center" wrap={false}>
@@ -692,7 +707,7 @@ export default function OfferBuilder() {
                           }
                         />
                       </BlockStack>
-                    </Box>
+                    </div>
                   ))}
                 </BlockStack>
 

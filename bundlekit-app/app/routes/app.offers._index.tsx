@@ -21,7 +21,9 @@ import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { OfferActionsMenu } from "../components/OfferActionsMenu";
-import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
+import { BORDER, BRAND_ACCENT, INK_SOFT, themeEditorDeepLink } from "../lib/theme";
+
+const CELL_PADDING = "14px 20px";
 
 function summarizeDiscount(config: OfferConfig): string {
   if (config.kind === "companion" && config.companionDiscount) {
@@ -163,7 +165,7 @@ export default function OffersIndex() {
             </EmptyState>
           ) : (
             <BlockStack gap="0">
-              <div style={{ padding: "16px 20px", display: "flex", gap: 12 }}>
+              <div style={{ padding: "14px 20px", display: "flex", gap: 12, borderBottom: `1px solid ${BORDER}` }}>
                 <div style={{ flex: 1 }}>
                   <TextField
                     label="Search offers"
@@ -187,8 +189,8 @@ export default function OffersIndex() {
               </div>
 
               <style>{`
-                .bk-offer-row { cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.06); }
-                .bk-offer-row:hover { background: rgba(0,0,0,0.02); }
+                .bk-offer-row { cursor: pointer; border-bottom: 1px solid ${BORDER}; }
+                .bk-offer-row:hover { background: rgba(24,20,15,0.02); }
                 .bk-offer-name:hover { text-decoration: underline; }
               `}</style>
 
@@ -205,9 +207,9 @@ export default function OffersIndex() {
                             fontSize: 11,
                             fontWeight: 700,
                             letterSpacing: "0.06em",
-                            color: "rgba(0,0,0,0.55)",
+                            color: INK_SOFT,
                             textTransform: "uppercase",
-                            borderBottom: "1px solid rgba(0,0,0,0.06)",
+                            borderBottom: `1px solid ${BORDER}`,
                           }}
                         >
                           {heading}
@@ -222,7 +224,7 @@ export default function OffersIndex() {
                         className="bk-offer-row"
                         onClick={() => navigate(`/app/offers/${offer.id}`)}
                       >
-                        <td style={{ padding: "16px 20px" }}>
+                        <td style={{ padding: CELL_PADDING }}>
                           <span className="bk-offer-name" style={{ color: BRAND_ACCENT }}>
                             <Text as="span" variant="bodyMd" fontWeight="semibold" tone="inherit">
                               {offer.name}
@@ -234,17 +236,17 @@ export default function OffersIndex() {
                             </Text>
                           </div>
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
+                        <td style={{ padding: CELL_PADDING }}>
                           <Text as="span" variant="bodyMd">
                             {offer.target}
                           </Text>
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
+                        <td style={{ padding: CELL_PADDING }}>
                           <Text as="span" variant="bodyMd">
                             {offer.discount}
                           </Text>
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
+                        <td style={{ padding: CELL_PADDING }}>
                           {offer.status === "live" || offer.status === "paused" ? (
                             <>
                               <Text as="span" variant="bodyMd" fontWeight="semibold">
@@ -262,10 +264,10 @@ export default function OffersIndex() {
                             </Text>
                           )}
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
+                        <td style={{ padding: CELL_PADDING }}>
                           <StatusPill status={offer.status as DisplayStatus} />
                         </td>
-                        <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                        <td style={{ padding: CELL_PADDING, textAlign: "right" }}>
                           <OfferActionsMenu
                             offerId={offer.id}
                             offerName={offer.name}

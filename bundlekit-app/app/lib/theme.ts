@@ -1,7 +1,10 @@
 /** BundleKit's own admin-UI brand color — distinct from Shop.defaultAccent,
  *  which is the merchant-customizable color used in the storefront widget
  *  preview. Changing one must never change the other. */
-export const BRAND_ACCENT = "#FF4A1C";
+export const BRAND_ACCENT = "#FF5A1F";
+export const INK = "#18140F";
+export const INK_SOFT = "#6E6555";
+export const BORDER = "#E7E0D0";
 export const PAGE_BACKGROUND = "#F2EFEA";
 
 // Must match the `uid` in extensions/bundlekit-widget/shopify.extension.toml

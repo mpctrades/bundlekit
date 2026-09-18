@@ -1,11 +1,14 @@
 import { Text } from "@shopify/polaris";
 import type { DisplayStatus } from "../lib/offers.server";
 
+// Semantic status colors: green = live/success, blue = scheduled/informational,
+// gray = paused/draft (neutral). Kept separate from BRAND_ACCENT — status is
+// never a branding surface.
 const STYLES: Record<DisplayStatus, { bg: string; fg: string; dot: string; label: string }> = {
   live: { bg: "rgba(0,128,96,0.12)", fg: "#00543D", dot: "#008060", label: "Live" },
-  scheduled: { bg: "rgba(180,120,0,0.12)", fg: "#7A4F00", dot: "#B47800", label: "Scheduled" },
-  paused: { bg: "rgba(26,26,26,0.08)", fg: "#1A1A1A", dot: "#1A1A1A", label: "Paused" },
-  draft: { bg: "rgba(0,0,0,0.06)", fg: "rgba(0,0,0,0.6)", dot: "rgba(0,0,0,0.35)", label: "Draft" },
+  scheduled: { bg: "rgba(0,91,187,0.10)", fg: "#00457A", dot: "#005BBB", label: "Scheduled" },
+  paused: { bg: "rgba(110,101,85,0.12)", fg: "#4A4436", dot: "#6E6555", label: "Paused" },
+  draft: { bg: "rgba(110,101,85,0.08)", fg: "#6E6555", dot: "#A39C89", label: "Draft" },
 };
 
 /** Status is never conveyed by color alone — the dot is decorative, the

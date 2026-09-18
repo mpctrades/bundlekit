@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BlockStack, Box, ButtonGroup, Button, IndexTable, InlineGrid, Page, Text } from "@shopify/polaris";
+import { BlockStack, Box, ButtonGroup, Button, IndexTable, InlineGrid, InlineStack, Page, Text } from "@shopify/polaris";
 import type { IndexTableProps } from "@shopify/polaris";
 import { CashDollarIcon, CheckCircleIcon, OrderIcon, ViewIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
@@ -9,6 +9,7 @@ import { authenticate } from "../shopify.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { bucketByDay, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
 import { formatMoney } from "../lib/format";
+import { themeEditorDeepLink } from "../lib/theme";
 import { Chart } from "../components/Chart";
 import { Funnel, type FunnelStage } from "../components/Funnel";
 import { KpiCard } from "../components/KpiCard";
@@ -28,6 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     days,
+    shopDomain: session.shop,
     currency: shop.currency,
     accent: shop.defaultAccent,
     totals: totalStats(rows),
@@ -40,8 +42,10 @@ const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion",
 type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
 
 export default function Analytics() {
-  const { days, currency, accent, totals, buckets, perOffer } = useLoaderData<typeof loader>();
+  const { days, shopDomain, currency, accent, totals, buckets, perOffer } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const themeEditor = themeEditorDeepLink(shopDomain);
+  const hasActivity = totals.views > 0 || totals.selects > 0 || totals.orders > 0;
   const [searchParams] = useSearchParams();
   const [sortColumnIndex, setSortColumnIndex] = useState(5); // Revenue, matching the server's default order
   const [sortDirection, setSortDirection] = useState<IndexTableProps["sortDirection"]>("descending");
@@ -117,52 +121,82 @@ export default function Analytics() {
           }
         />
 
-        <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
-          {cards.map((card, index) => (
-            <KpiCard
-              key={card.label}
-              label={card.label}
-              value={card.value}
-              format={card.format}
-              icon={card.icon}
-              tint={card.tint}
-              delay={index * 0.05}
-            />
-          ))}
-        </InlineGrid>
+        {!hasActivity ? (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Panel>
+              <BlockStack gap="300" inlineAlign="center">
+                <Text as="h2" variant="headingMd">
+                  No bundle activity yet
+                </Text>
+                <Text as="p" tone="subdued" alignment="center">
+                  Revenue, orders, and widget activity will show up here once shoppers start seeing a live offer.
+                  A few things unlock that:
+                </Text>
+                <BlockStack gap="150" inlineAlign="center">
+                  <Text as="p">1. Publish an offer</Text>
+                  <Text as="p">2. Make sure BundleKit's automatic discount is activated</Text>
+                  <Text as="p">3. Install the BundleKit block on your product page</Text>
+                </BlockStack>
+                <InlineStack gap="200">
+                  <Button onClick={() => navigate("/app/offers")}>View offers</Button>
+                  <Button onClick={() => navigate("/app/help")}>Check setup</Button>
+                  <Button onClick={() => window.open(themeEditor, "_blank")}>Install theme block</Button>
+                </InlineStack>
+              </BlockStack>
+            </Panel>
+          </motion.div>
+        ) : (
+          <>
+            <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
+              {cards.map((card, index) => (
+                <KpiCard
+                  key={card.label}
+                  label={card.label}
+                  value={card.value}
+                  format={card.format}
+                  icon={card.icon}
+                  tint={card.tint}
+                  delay={index * 0.05}
+                />
+              ))}
+            </InlineGrid>
 
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3 }}>
-          <Panel>
-            <BlockStack gap="300">
-              <Text as="h2" variant="headingMd">
-                From views to revenue
-              </Text>
-              <Funnel stages={funnelStages} />
-            </BlockStack>
-          </Panel>
-        </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3 }}>
+              <Panel>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    From views to revenue
+                  </Text>
+                  <Funnel stages={funnelStages} />
+                </BlockStack>
+              </Panel>
+            </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
-          <Panel>
-            <BlockStack gap="300">
-              <Text as="h2" variant="headingMd">
-                Revenue and orders over time
-              </Text>
-              <Chart
-                labels={buckets.map((bucket) => bucket.day)}
-                series={[
-                  { label: "Revenue", color: accent, values: buckets.map((bucket) => bucket.revenue) },
-                  { label: "Orders", color: "#5C6AC4", values: buckets.map((bucket) => bucket.orders), scale: 100 },
-                ]}
-                formatValue={(value, seriesIndex) => (seriesIndex === 0 ? formatMoney(value, currency) : `${value} orders`)}
-                formatLabel={(label) => new Date(`${label}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              />
-              <Text as="p" tone="subdued" variant="bodySm">
-                Orders are scaled for visibility on the same axis as revenue.
-              </Text>
-            </BlockStack>
-          </Panel>
-        </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
+              <Panel>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    Revenue and orders over time
+                  </Text>
+                  <Box background="bg-surface-secondary" borderRadius="200" padding="300">
+                    <Chart
+                      labels={buckets.map((bucket) => bucket.day)}
+                      series={[
+                        { label: "Revenue", color: accent, values: buckets.map((bucket) => bucket.revenue) },
+                        { label: "Orders", color: "#5C6AC4", values: buckets.map((bucket) => bucket.orders), scale: 100 },
+                      ]}
+                      formatValue={(value, seriesIndex) => (seriesIndex === 0 ? formatMoney(value, currency) : `${value} orders`)}
+                      formatLabel={(label) => new Date(`${label}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    />
+                  </Box>
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    Orders are scaled for visibility on the same axis as revenue.
+                  </Text>
+                </BlockStack>
+              </Panel>
+            </motion.div>
+          </>
+        )}
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.3 }}>
           <Panel padding="0px">

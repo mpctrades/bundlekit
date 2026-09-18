@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Banner, BlockStack, Button, Checkbox, FormLayout, Icon, InlineStack, Page, RangeSlider, Select, Text, TextField } from "@shopify/polaris";
+import { Banner, BlockStack, Button, ButtonGroup, Checkbox, FormLayout, Icon, InlineStack, Page, RangeSlider, Select, Text, TextField } from "@shopify/polaris";
 import { StarFilledIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
@@ -71,6 +71,7 @@ export default function Design() {
   const [defaultWidgetTitle, setDefaultWidgetTitle] = useState(shop.defaultWidgetTitle);
   const [defaultSavingsDisplay, setDefaultSavingsDisplay] = useState<SavingsDisplay>(shop.defaultSavingsDisplay);
   const [defaultCardStyle, setDefaultCardStyle] = useState<CardStyle>(shop.defaultCardStyle);
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
   const save = () => {
     const form = new FormData();
@@ -120,81 +121,103 @@ export default function Design() {
           <div>
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
               <Panel>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    Appearance
-                  </Text>
-                  <FormLayout>
-                    <InlineStack gap="200" blockAlign="end" wrap={false}>
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          minWidth: 44,
-                          borderRadius: 10,
-                          background: defaultAccent,
-                          border: "1px solid rgba(0,0,0,0.1)",
-                        }}
+                <BlockStack gap="500">
+                  <BlockStack gap="300">
+                    <Text as="h2" variant="headingMd">
+                      Appearance
+                    </Text>
+                    <FormLayout>
+                      <InlineStack gap="200" blockAlign="end" wrap={false}>
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            minWidth: 44,
+                            borderRadius: 10,
+                            background: defaultAccent,
+                            border: "1px solid rgba(0,0,0,0.1)",
+                          }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <TextField label="Accent color" value={defaultAccent} onChange={setDefaultAccent} autoComplete="off" />
+                        </div>
+                      </InlineStack>
+
+                      <RangeSlider
+                        label="Corner radius"
+                        value={defaultRadius}
+                        onChange={(value) => setDefaultRadius(Array.isArray(value) ? value[0] : value)}
+                        min={0}
+                        max={24}
+                        output
+                        prefix={<Text as="span" tone="subdued" variant="bodySm">Square</Text>}
+                        suffix={<Text as="span" tone="subdued" variant="bodySm">Round</Text>}
                       />
-                      <div style={{ flex: 1 }}>
-                        <TextField label="Accent color" value={defaultAccent} onChange={setDefaultAccent} autoComplete="off" />
-                      </div>
-                    </InlineStack>
 
-                    <RangeSlider
-                      label="Corner radius"
-                      value={defaultRadius}
-                      onChange={(value) => setDefaultRadius(Array.isArray(value) ? value[0] : value)}
-                      min={0}
-                      max={24}
-                      output
-                      prefix={<Text as="span" tone="subdued" variant="bodySm">Square</Text>}
-                      suffix={<Text as="span" tone="subdued" variant="bodySm">Round</Text>}
-                    />
+                      <Select
+                        label="Card style"
+                        options={[
+                          { label: "Outline", value: "outline" },
+                          { label: "Soft", value: "soft" },
+                        ]}
+                        value={defaultCardStyle}
+                        onChange={(value) => setDefaultCardStyle(value as CardStyle)}
+                      />
+                    </FormLayout>
+                  </BlockStack>
 
-                    <TextField
-                      label="Most popular badge"
-                      value={defaultBadgeText}
-                      onChange={setDefaultBadgeText}
-                      autoComplete="off"
-                      helpText="Shown on whichever tier a merchant marks as the badge."
-                    />
+                  <BlockStack gap="300">
+                    <Text as="h2" variant="headingMd">
+                      Labels
+                    </Text>
+                    <FormLayout>
+                      <TextField
+                        label="Widget title"
+                        value={defaultWidgetTitle}
+                        onChange={setDefaultWidgetTitle}
+                        autoComplete="off"
+                        helpText="The heading shoppers see above your tiers, e.g. “Bundle & save.”"
+                      />
 
+                      <TextField
+                        label="Most popular badge"
+                        value={defaultBadgeText}
+                        onChange={setDefaultBadgeText}
+                        autoComplete="off"
+                        helpText="Shown on whichever tier a merchant marks as the badge."
+                      />
+                    </FormLayout>
+                  </BlockStack>
+
+                  <BlockStack gap="300">
+                    <Text as="h2" variant="headingMd">
+                      Savings
+                    </Text>
+                    <FormLayout>
+                      <Select
+                        label="Show savings as"
+                        options={[
+                          { label: "Amount", value: "amount" },
+                          { label: "Percentage", value: "percentage" },
+                          { label: "Both", value: "both" },
+                        ]}
+                        value={defaultSavingsDisplay}
+                        onChange={(value) => setDefaultSavingsDisplay(value as SavingsDisplay)}
+                      />
+                    </FormLayout>
+                  </BlockStack>
+
+                  <BlockStack gap="300">
+                    <Text as="h2" variant="headingMd">
+                      Trust message
+                    </Text>
                     <Checkbox
                       label='Show "discount applied at checkout" trust line'
                       checked={defaultShowTrustLine}
                       onChange={setDefaultShowTrustLine}
                     />
+                  </BlockStack>
 
-                    <TextField
-                      label="Widget title"
-                      value={defaultWidgetTitle}
-                      onChange={setDefaultWidgetTitle}
-                      autoComplete="off"
-                      helpText="The heading shoppers see above your tiers, e.g. “Bundle & save.”"
-                    />
-
-                    <Select
-                      label="Show savings as"
-                      options={[
-                        { label: "Amount", value: "amount" },
-                        { label: "Percentage", value: "percentage" },
-                        { label: "Both", value: "both" },
-                      ]}
-                      value={defaultSavingsDisplay}
-                      onChange={(value) => setDefaultSavingsDisplay(value as SavingsDisplay)}
-                    />
-
-                    <Select
-                      label="Card style"
-                      options={[
-                        { label: "Outline", value: "outline" },
-                        { label: "Soft", value: "soft" },
-                      ]}
-                      value={defaultCardStyle}
-                      onChange={(value) => setDefaultCardStyle(value as CardStyle)}
-                    />
-                  </FormLayout>
                   <Text as="p" tone="subdued" variant="bodySm">
                     BundleKit inherits the store font, base text color and button shape by default.
                   </Text>
@@ -216,11 +239,21 @@ export default function Design() {
                         Example product page
                       </Text>
                     </BlockStack>
+                    <ButtonGroup variant="segmented">
+                      <Button pressed={previewMode === "desktop"} onClick={() => setPreviewMode("desktop")}>
+                        Desktop
+                      </Button>
+                      <Button pressed={previewMode === "mobile"} onClick={() => setPreviewMode("mobile")}>
+                        Mobile
+                      </Button>
+                    </ButtonGroup>
                   </InlineStack>
                 </div>
                 <div style={{ padding: 20 }}>
                   <div
                     style={{
+                      margin: previewMode === "mobile" ? "0 auto" : undefined,
+                      maxWidth: previewMode === "mobile" ? 300 : "100%",
                       border: "1px solid rgba(0,0,0,0.08)",
                       borderRadius: 16,
                       padding: 16,

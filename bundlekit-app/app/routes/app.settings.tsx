@@ -89,7 +89,7 @@ export default function Settings() {
               <Panel>
                 <BlockStack gap="300">
                   <Text as="h2" variant="headingMd">
-                    Combining discounts
+                    Discount behavior
                   </Text>
                   <Text as="p" tone="subdued" variant="bodySm">
                     Applies to new offers only — existing offers keep whatever
@@ -116,7 +116,7 @@ export default function Settings() {
                 <Panel>
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingMd">
-                      Shop
+                      Store information
                     </Text>
                     <Text as="p" variant="bodySm">
                       Domain: {data.shopDomain}

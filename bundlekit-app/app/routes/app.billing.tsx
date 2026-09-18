@@ -75,7 +75,7 @@ export default function Billing() {
             <InlineStack gap="400" wrap={false}>
               {(Object.keys(PLANS) as PlanKey[]).map((key) => (
                 <Box key={key} width="33%">
-                  <Panel>
+                  <Panel highlighted={plan === key}>
                     <BlockStack gap="300">
                       <InlineStack align="space-between" blockAlign="center">
                         <Text as="h3" variant="headingMd">{PLANS[key].name}</Text>

@@ -6,7 +6,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
-import { themeEditorDeepLink } from "../lib/theme";
+import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
 import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
 import { getFunctionId } from "../lib/offers.server";
 import { formatMoney } from "../lib/format";
@@ -228,18 +228,18 @@ export default function Dashboard() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }}>
               <Panel>
                 <BlockStack gap="300">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h2" variant="headingMd">
-                      BundleKit setup
-                    </Text>
-                    {!allHealthy ? (
-                      <Box background="bg-fill-caution-secondary" borderRadius="full" paddingInline="300" paddingBlock="100">
-                        <Text as="span" variant="bodySm" fontWeight="semibold">
+                  <Text as="h2" variant="headingMd">
+                    {allHealthy ? (
+                      "BundleKit setup"
+                    ) : (
+                      <>
+                        BundleKit setup —{" "}
+                        <Text as="span" tone="subdued" fontWeight="regular">
                           {doneCount} of {healthChecks.length} complete
                         </Text>
-                      </Box>
-                    ) : null}
-                  </InlineStack>
+                      </>
+                    )}
+                  </Text>
 
                   {allHealthy ? (
                     <BlockStack gap="200">
@@ -257,6 +257,17 @@ export default function Dashboard() {
                     <BlockStack gap="300">
                       {healthChecks.map((item) => {
                         const onItemClick = checklistLinks[item.label];
+                        // Three visual states: done (✓ green), needs attention
+                        // (! amber — merchant can act on it right now via
+                        // onItemClick), or not started (○ neutral gray — no
+                        // direct action yet, e.g. resolves automatically once
+                        // an earlier step completes).
+                        const state = item.done ? "done" : onItemClick ? "attention" : "pending";
+                        const iconStyles = {
+                          done: { bg: "rgba(0,128,96,0.12)", fg: "#008060" },
+                          attention: { bg: "rgba(0,91,187,0.10)", fg: "#005BBB" },
+                          pending: { bg: "rgba(110,101,85,0.10)", fg: "#6E6555" },
+                        }[state];
                         return (
                           <InlineStack
                             key={item.label}
@@ -281,26 +292,30 @@ export default function Dashboard() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                background: item.done ? "rgba(0,128,96,0.12)" : "rgba(180,120,0,0.12)",
+                                background: iconStyles.bg,
                               }}
                             >
-                              {item.done ? (
+                              {state === "done" ? (
                                 <span style={{ width: 14, height: 14, display: "inline-flex" }}>
                                   <svg viewBox="0 0 20 20" fill="none" style={{ width: "100%", height: "100%" }}>
-                                    <path d="M4 10l4 4 8-8" stroke="#008060" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M4 10l4 4 8-8" stroke={iconStyles.fg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                                   </svg>
                                 </span>
                               ) : (
                                 <Text as="span" variant="bodySm" fontWeight="bold">
-                                  <span style={{ color: "#B47800" }}>!</span>
+                                  <span style={{ color: iconStyles.fg }}>{state === "attention" ? "!" : "○"}</span>
                                 </Text>
                               )}
                             </div>
                             <Text as="span" variant="bodySm" tone={item.done ? undefined : "subdued"}>
                               {item.label}
                             </Text>
-                            {onItemClick ? (
-                              <span style={{ marginLeft: "auto", color: "rgba(0,0,0,0.3)", fontSize: 12 }}>›</span>
+                            {onItemClick && state === "attention" ? (
+                              <span style={{ marginLeft: "auto" }}>
+                                <Text as="span" variant="bodySm" fontWeight="semibold">
+                                  <span style={{ color: BRAND_ACCENT }}>Fix it ›</span>
+                                </Text>
+                              </span>
                             ) : null}
                           </InlineStack>
                         );
