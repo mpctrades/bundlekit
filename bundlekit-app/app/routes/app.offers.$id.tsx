@@ -50,7 +50,21 @@ import { ResourcePickerField, type PickedResource } from "../components/Resource
 import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/ToastProvider";
 
-export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+export const loader = async (args: LoaderFunctionArgs) => {
+  try {
+    return await handleOfferLoader(args);
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    // Mirrors the action's own catch-all: a loader error here (e.g. a
+    // transient Prisma/Admin-API failure during the loader revalidation
+    // that automatically follows every save/publish) must never take the
+    // whole builder down — the merchant just clicked Save successfully.
+    console.error("[bundlekit] offer loader failed", error);
+    return { loadError: true as const };
+  }
+};
+
+async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const shop = await getOrCreateShop(session.shop);
   const previewDesign = { savingsDisplay: shop.defaultSavingsDisplay as SavingsDisplay, cardStyle: shop.defaultCardStyle as CardStyle };
@@ -146,7 +160,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     badgeText: shop.defaultBadgeText,
     previewDesign,
   };
-};
+}
 
 export const action = async (args: ActionFunctionArgs) => {
   try {
@@ -406,9 +420,7 @@ export default function OfferBuilder() {
   // from, so it falls back to an empty draft that's never actually shown
   // (the branch below returns before this state is used).
   const limitReached = "limitReached" in data && data.limitReached;
-  const offer = limitReached
-    ? null
-    : data.offer;
+  const offer = "offer" in data ? data.offer : undefined;
 
   const [name, setName] = useState(offer?.name ?? "");
   const [targetType, setTargetType] = useState(offer?.targetType ?? "products");
@@ -484,6 +496,20 @@ export default function OfferBuilder() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
+
+  if ("loadError" in data) {
+    return (
+      <Page title="Offer" backAction={{ onAction: () => navigate("/app/offers") }}>
+        <Layout>
+          <Layout.Section>
+            <Banner tone="critical" title="Couldn't load this offer">
+              <p>Something went wrong loading this page. Try again, or go back to your offers.</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
 
   if (limitReached || !offer) {
     return (
