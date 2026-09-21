@@ -153,12 +153,8 @@ export const action = async (args: ActionFunctionArgs) => {
     return await handleOfferAction(args);
   } catch (error) {
     if (error instanceof Response) throw error;
-    // TEMPORARY diagnostic wrap — see if(true) block below for removal note.
-    if (true) {
-      const debug = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error);
-      console.error("[bundlekit] offer action failed (diagnostic)", error);
-      return { error: `DIAGNOSTIC: ${debug}` };
-    }
+    console.error("[bundlekit] offer action failed", error);
+    return { error: friendlyErrorMessage(error) };
   }
 };
 
