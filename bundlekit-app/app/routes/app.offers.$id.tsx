@@ -148,7 +148,21 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   };
 };
 
-export const action = async ({ params, request }: ActionFunctionArgs) => {
+export const action = async (args: ActionFunctionArgs) => {
+  try {
+    return await handleOfferAction(args);
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    // TEMPORARY diagnostic wrap — see if(true) block below for removal note.
+    if (true) {
+      const debug = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error);
+      console.error("[bundlekit] offer action failed (diagnostic)", error);
+      return { error: `DIAGNOSTIC: ${debug}` };
+    }
+  }
+};
+
+async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const shop = await getOrCreateShop(session.shop);
@@ -317,7 +331,7 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
   }
 
   return { ok: true, offerId: offer.id };
-};
+}
 
 /** datetime-local inputs show/parse LOCAL time. Converting here (not on the
  *  server) is what keeps a merchant's schedule choice from silently shifting
