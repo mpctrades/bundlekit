@@ -592,13 +592,6 @@ export default function OfferBuilder() {
         </InlineStack>
       }
     >
-      {isDirty ? (
-        <ContextualSaveBar
-          message="Unsaved changes"
-          saveAction={{ content: "Save draft", loading: busy, disabled: hasBlockingErrors, onAction: () => save("save") }}
-          discardAction={{ content: "Discard", onAction: discard }}
-        />
-      ) : null}
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
