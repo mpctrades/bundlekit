@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketByDay, deriveRateMetrics, summarizeByOffer, totalStats } from "./stats.server";
+import { bucketByDay, computeTrend, deriveRateMetrics, summarizeByOffer, totalStats } from "./stats.server";
 
 function stat(day: string, offer: { id: string; name: string; status: string }, values: Partial<{ views: number; selects: number; orders: number; revenue: number }> = {}) {
   return {
@@ -80,5 +80,27 @@ describe("deriveRateMetrics", () => {
 
   it("keeps a real 0% conversion distinct from no data", () => {
     expect(deriveRateMetrics({ views: 50, orders: 0, revenue: 0 }).conversionRate).toBe(0);
+  });
+});
+
+describe("computeTrend", () => {
+  it("reports an upward percentage when current exceeds previous", () => {
+    expect(computeTrend(150, 100)).toEqual({ direction: "up", percent: 50 });
+  });
+
+  it("reports a downward percentage when current is below previous", () => {
+    expect(computeTrend(50, 100)).toEqual({ direction: "down", percent: 50 });
+  });
+
+  it("treats a sub-0.5% move as flat rather than up or down", () => {
+    expect(computeTrend(100.2, 100)).toEqual({ direction: "flat", percent: 0 });
+  });
+
+  it("returns null when both periods are zero — nothing to compare", () => {
+    expect(computeTrend(0, 0)).toBeNull();
+  });
+
+  it("treats going from zero to something as a new-activity case, not +Infinity%", () => {
+    expect(computeTrend(40, 0)).toEqual({ direction: "up", percent: 100 });
   });
 });

@@ -52,6 +52,24 @@ export async function fetchStatsForRange(shopId: string, days: number) {
   });
 }
 
+/** DB query — the block of `days` immediately before the current range, so
+ *  KPI cards can show a "vs previous period" trend instead of a bare number. */
+export async function fetchStatsForPreviousRange(shopId: string, days: number) {
+  const currentSince = new Date();
+  currentSince.setUTCHours(0, 0, 0, 0);
+  currentSince.setUTCDate(currentSince.getUTCDate() - (days - 1));
+
+  const previousUntil = new Date(currentSince);
+  previousUntil.setUTCDate(previousUntil.getUTCDate() - 1);
+  const previousSince = new Date(currentSince);
+  previousSince.setUTCDate(previousSince.getUTCDate() - days);
+
+  return prisma.offerStat.findMany({
+    where: { offer: { shopId }, day: { gte: previousSince, lte: previousUntil } },
+    include: { offer: { select: { id: true, name: true, status: true } } },
+  });
+}
+
 type RawStat = Awaited<ReturnType<typeof fetchStatsForRange>>[number];
 
 /** One bucket per calendar day, zero-filled so the chart never has gaps. */
@@ -97,6 +115,22 @@ export function summarizeByOffer(rows: RawStat[]): OfferSummary[] {
     byOffer.set(row.offer.id, existing);
   }
   return [...byOffer.values()].sort((a, b) => b.revenue - a.revenue);
+}
+
+export interface Trend {
+  direction: "up" | "down" | "flat";
+  percent: number;
+}
+
+/** Percent change vs. the previous period, for a KPI card's trend chip.
+ *  Null when there's nothing to compare against (previous period had zero) —
+ *  a "0 -> N" jump isn't a meaningful percentage, so the card shows "New"
+ *  instead of a misleading +∞%. */
+export function computeTrend(current: number, previous: number): Trend | null {
+  if (previous === 0) return current === 0 ? null : { direction: "up", percent: 100 };
+  const percent = ((current - previous) / previous) * 100;
+  if (Math.abs(percent) < 0.5) return { direction: "flat", percent: 0 };
+  return { direction: percent > 0 ? "up" : "down", percent: Math.abs(percent) };
 }
 
 /** Totals across the whole set, for KPI cards. */

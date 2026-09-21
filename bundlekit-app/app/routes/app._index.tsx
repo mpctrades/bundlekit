@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Banner, BlockStack, Box, Button, EmptyState, Icon, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
 import { CashDollarIcon, ChartVerticalIcon, LiveIcon, OrderIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
@@ -7,7 +8,15 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
 import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
-import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
+import {
+  bucketByDay,
+  computeTrend,
+  deriveRateMetrics,
+  fetchStatsForPreviousRange,
+  fetchStatsForRange,
+  summarizeByOffer,
+  totalStats,
+} from "../lib/stats.server";
 import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
@@ -42,7 +51,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // instead of four chained ones. That used to be the dashboard's biggest
     // latency cost: two live Admin API calls awaited back-to-back before the
     // page could even start rendering.
-    const [syncedCurrency, offerCount, liveCount, rows, functionDeployed] = await Promise.all([
+    const [syncedCurrency, offerCount, liveCount, rows, previousRows, functionDeployed] = await Promise.all([
       // Best-effort: the store's real currency, not the schema default. Never
       // let a sync hiccup block the dashboard from loading.
       syncShopInfo(admin, shop.id).catch((error) => {
@@ -52,6 +61,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       prisma.offer.count({ where: { shopId: shop.id } }),
       prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
       fetchStatsForRange(shop.id, 30),
+      // The prior 30 days, purely for the KPI cards' trend chips — never
+      // let a hiccup here take down the numbers that matter.
+      fetchStatsForPreviousRange(shop.id, 30).catch((error) => {
+        console.warn("[bundlekit] previous-period stats failed", error);
+        return [];
+      }),
       // getFunctionId throws when no Function is deployed yet — correct for a
       // real publish, but this is only a health check, so reduce to a boolean.
       // Cached on shop.functionId after the first successful lookup, so this
@@ -64,6 +79,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const currency = syncedCurrency ?? shop.currency;
 
     const totals = totalStats(rows);
+    const previousTotals = totalStats(previousRows);
 
     return {
       shopDomain: session.shop,
@@ -73,6 +89,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       liveCount,
       functionDeployed,
       totals,
+      trends: {
+        revenue: computeTrend(totals.revenue, previousTotals.revenue),
+        orders: computeTrend(totals.orders, previousTotals.orders),
+      },
       rates: deriveRateMetrics(totals),
       buckets: bucketByDay(rows, 30),
       topOffers: summarizeByOffer(rows).slice(0, 5),
@@ -90,6 +110,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       liveCount: 0,
       functionDeployed: false,
       totals,
+      trends: { revenue: null, orders: null },
       rates: deriveRateMetrics(totals),
       buckets: bucketByDay([], 30),
       topOffers: [] as ReturnType<typeof summarizeByOffer>,
@@ -108,13 +129,24 @@ export default function Dashboard() {
     liveCount,
     functionDeployed,
     totals,
+    trends,
     rates,
     buckets,
     topOffers,
-    greeting: timeGreeting,
+    greeting: serverGreeting,
     error,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+
+  // The loader computes this from the server's clock, which is almost never
+  // the merchant's own timezone (this VPS runs UTC) — "Good morning" showing
+  // up mid-afternoon for the merchant is that mismatch, not a bug in the
+  // greeting logic itself. Correct it once mounted, using the browser's own
+  // local time; the server value is only a same-request SSR fallback.
+  const [timeGreeting, setTimeGreeting] = useState(serverGreeting);
+  useEffect(() => {
+    setTimeGreeting(greeting(new Date().getHours()));
+  }, []);
 
   const themeEditor = themeEditorDeepLink(shopDomain);
 
@@ -154,8 +186,26 @@ export default function Dashboard() {
   }
 
   const cards = [
-    { label: "Bundle revenue (30d)", value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060", onClick: () => navigate("/app/analytics") },
-    { label: "Bundle orders (30d)", value: totals.orders, format: (v: number) => String(Math.round(v)), icon: OrderIcon, tint: "#5C6AC4", onClick: () => navigate("/app/analytics") },
+    {
+      label: "Bundle revenue (30d)",
+      value: totals.revenue,
+      format: (v: number) => formatMoney(v, currency),
+      icon: CashDollarIcon,
+      tint: "#008060",
+      onClick: () => navigate("/app/analytics"),
+      trend: trends.revenue,
+      trendCompareLabel: "vs prior 30d",
+    },
+    {
+      label: "Bundle orders (30d)",
+      value: totals.orders,
+      format: (v: number) => String(Math.round(v)),
+      icon: OrderIcon,
+      tint: "#5C6AC4",
+      onClick: () => navigate("/app/analytics"),
+      trend: trends.orders,
+      trendCompareLabel: "vs prior 30d",
+    },
     {
       label: "Conversion rate (30d)",
       value: conversionRate ?? 0,
@@ -223,6 +273,8 @@ export default function Dashboard() {
               tint={card.tint}
               delay={index * 0.05}
               onClick={card.onClick}
+              trend={card.trend}
+              trendCompareLabel={card.trendCompareLabel}
             />
           ))}
         </InlineGrid>

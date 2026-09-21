@@ -7,7 +7,14 @@ import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router"
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop } from "../lib/shop.server";
-import { bucketByDay, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
+import {
+  bucketByDay,
+  computeTrend,
+  fetchStatsForPreviousRange,
+  fetchStatsForRange,
+  summarizeByOffer,
+  totalStats,
+} from "../lib/stats.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { themeEditorDeepLink } from "../lib/theme";
@@ -32,14 +39,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const shop = await getOrCreateShop(session.shop);
-    const rows = await fetchStatsForRange(shop.id, days);
+    const [rows, previousRows] = await Promise.all([
+      fetchStatsForRange(shop.id, days),
+      // Purely for the KPI cards' trend chips — never let a hiccup here
+      // take down the numbers that matter.
+      fetchStatsForPreviousRange(shop.id, days).catch((error) => {
+        console.warn("[bundlekit] previous-period stats failed", error);
+        return [];
+      }),
+    ]);
+    const totals = totalStats(rows);
+    const previousTotals = totalStats(previousRows);
 
     return {
       days,
       shopDomain: session.shop,
       currency: shop.currency,
       accent: shop.defaultAccent,
-      totals: totalStats(rows),
+      totals,
+      trends: {
+        revenue: computeTrend(totals.revenue, previousTotals.revenue),
+        orders: computeTrend(totals.orders, previousTotals.orders),
+        views: computeTrend(totals.views, previousTotals.views),
+        selects: computeTrend(totals.selects, previousTotals.selects),
+      },
       buckets: bucketByDay(rows, days),
       perOffer: summarizeByOffer(rows),
       error: null as string | null,
@@ -52,6 +75,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       currency: FALLBACK_CURRENCY,
       accent: FALLBACK_ACCENT,
       totals: totalStats([]),
+      trends: { revenue: null, orders: null, views: null, selects: null },
       buckets: bucketByDay([], days),
       perOffer: [] as ReturnType<typeof summarizeByOffer>,
       error: friendlyErrorMessage(error),
@@ -63,7 +87,7 @@ const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion",
 type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
 
 export default function Analytics() {
-  const { days, shopDomain, currency, accent, totals, buckets, perOffer, error } = useLoaderData<typeof loader>();
+  const { days, shopDomain, currency, accent, totals, trends, buckets, perOffer, error } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const themeEditor = themeEditorDeepLink(shopDomain);
   const hasActivity = totals.views > 0 || totals.selects > 0 || totals.orders > 0;
@@ -92,11 +116,12 @@ export default function Analytics() {
     setSortDirection(direction);
   };
 
+  const trendCompareLabel = `vs prior ${days}d`;
   const cards = [
-    { label: `Revenue (${days}d)`, value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060" },
-    { label: `Orders (${days}d)`, value: totals.orders, format: (v: number) => String(Math.round(v)), icon: OrderIcon, tint: "#5C6AC4" },
-    { label: `Widget views (${days}d)`, value: totals.views, format: (v: number) => String(Math.round(v)), icon: ViewIcon, tint: "#006FBB" },
-    { label: `Widget selections (${days}d)`, value: totals.selects, format: (v: number) => String(Math.round(v)), icon: CheckCircleIcon, tint: accent },
+    { label: `Revenue (${days}d)`, value: totals.revenue, format: (v: number) => formatMoney(v, currency), icon: CashDollarIcon, tint: "#008060", trend: trends.revenue },
+    { label: `Orders (${days}d)`, value: totals.orders, format: (v: number) => String(Math.round(v)), icon: OrderIcon, tint: "#5C6AC4", trend: trends.orders },
+    { label: `Widget views (${days}d)`, value: totals.views, format: (v: number) => String(Math.round(v)), icon: ViewIcon, tint: "#006FBB", trend: trends.views },
+    { label: `Widget selections (${days}d)`, value: totals.selects, format: (v: number) => String(Math.round(v)), icon: CheckCircleIcon, tint: accent, trend: trends.selects },
   ];
 
   const selectionRate = totals.views > 0 ? (totals.selects / totals.views) * 100 : null;
@@ -180,6 +205,8 @@ export default function Analytics() {
                   icon={card.icon}
                   tint={card.tint}
                   delay={index * 0.05}
+                  trend={card.trend}
+                  trendCompareLabel={trendCompareLabel}
                 />
               ))}
             </InlineGrid>
