@@ -591,8 +591,6 @@ export default function OfferBuilder() {
           {isDirty ? <Badge tone="attention">Unsaved changes</Badge> : null}
         </InlineStack>
       }
-      primaryAction={{ content: "Publish", loading: busy, disabled: hasBlockingErrors, onAction: () => save("publish") }}
-      secondaryActions={[{ content: "Save draft", disabled: hasBlockingErrors, onAction: () => save("save") }]}
     >
       {isDirty ? (
         <ContextualSaveBar
@@ -604,6 +602,20 @@ export default function OfferBuilder() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            {/* Plain in-page buttons rather than Page's primaryAction/
+                secondaryActions — those render into Shopify's native title
+                bar via App Bridge, and the title-bar action bridge crashed
+                the whole app on every save (see git history for the app
+                error boundary that caught it). A normal Polaris Button
+                stays inside our own React tree and just works. */}
+            <InlineStack align="end" gap="200">
+              <Button disabled={hasBlockingErrors} onClick={() => save("save")}>
+                Save draft
+              </Button>
+              <Button variant="primary" loading={busy} disabled={hasBlockingErrors} onClick={() => save("publish")}>
+                Publish
+              </Button>
+            </InlineStack>
             {offer.resourceLoadError ? <ProductAccessBanner shopDomain={shopDomain} /> : null}
             {actionData && "error" in actionData && actionData.error ? (
               <Banner tone="critical" title="This offer was not published">
