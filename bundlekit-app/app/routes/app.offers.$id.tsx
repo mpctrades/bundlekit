@@ -255,21 +255,27 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
     },
   };
 
-  const offer = offerId
-    ? await prisma.offer.update({
-        where: { id: offerId },
-        data: { name, targetType, targetIds, combineProduct, combineOrder, startsAt, endsAt, config: config as never },
-      })
-    : await prisma.offer.create({
-        data: { shopId: shop.id, name, targetType, targetIds, combineProduct, combineOrder, startsAt, endsAt, config: config as never },
-      });
+  let offer;
+  try {
+    offer = offerId
+      ? await prisma.offer.update({
+          where: { id: offerId },
+          data: { name, targetType, targetIds, combineProduct, combineOrder, startsAt, endsAt, config: config as never },
+        })
+      : await prisma.offer.create({
+          data: { shopId: shop.id, name, targetType, targetIds, combineProduct, combineOrder, startsAt, endsAt, config: config as never },
+        });
 
-  // The config carries its own id so the widget can beacon and the order
-  // webhook can attribute revenue. Write it back now that we have one.
-  await prisma.offer.update({
-    where: { id: offer.id },
-    data: { config: { ...config, id: offer.id } as never },
-  });
+    // The config carries its own id so the widget can beacon and the order
+    // webhook can attribute revenue. Write it back now that we have one.
+    await prisma.offer.update({
+      where: { id: offer.id },
+      data: { config: { ...config, id: offer.id } as never },
+    });
+  } catch (error) {
+    console.error("[bundlekit] offer save failed", error);
+    return { error: friendlyErrorMessage(error) };
+  }
 
   if (form.get("intent") === "publish") {
     try {
