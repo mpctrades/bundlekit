@@ -7,7 +7,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
-import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
+import { themeEditorDeepLink } from "../lib/theme";
 import {
   bucketByDay,
   computeTrend,
@@ -24,6 +24,7 @@ import { Chart } from "../components/Chart";
 import { KpiCard } from "../components/KpiCard";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { SetupChecklist } from "../components/SetupChecklist";
 
 // Schema defaults (prisma/schema.prisma Shop model) — used only when the
 // dashboard's own data can't be read at all, so the page still renders
@@ -340,71 +341,13 @@ export default function Dashboard() {
                     </BlockStack>
                   ) : (
                     <BlockStack gap="300">
-                      {healthChecks.map((item) => {
-                        const onItemClick = checklistLinks[item.label];
-                        // Three visual states: done (✓ green), needs attention
-                        // (! amber — merchant can act on it right now via
-                        // onItemClick), or not started (○ neutral gray — no
-                        // direct action yet, e.g. resolves automatically once
-                        // an earlier step completes).
-                        const state = item.done ? "done" : onItemClick ? "attention" : "pending";
-                        const iconStyles = {
-                          done: { bg: "rgba(0,128,96,0.12)", fg: "#008060" },
-                          attention: { bg: "rgba(0,91,187,0.10)", fg: "#005BBB" },
-                          pending: { bg: "rgba(110,101,85,0.10)", fg: "#6E6555" },
-                        }[state];
-                        return (
-                          <InlineStack
-                            key={item.label}
-                            gap="300"
-                            blockAlign="center"
-                            wrap={false}
-                            {...(onItemClick
-                              ? {
-                                  onClick: onItemClick,
-                                  role: "button" as const,
-                                  tabIndex: 0,
-                                  style: { cursor: "pointer" },
-                                }
-                              : {})}
-                          >
-                            <div
-                              style={{
-                                width: 24,
-                                height: 24,
-                                minWidth: 24,
-                                borderRadius: "50%",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                background: iconStyles.bg,
-                              }}
-                            >
-                              {state === "done" ? (
-                                <span style={{ width: 14, height: 14, display: "inline-flex" }}>
-                                  <svg viewBox="0 0 20 20" fill="none" style={{ width: "100%", height: "100%" }}>
-                                    <path d="M4 10l4 4 8-8" stroke={iconStyles.fg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </span>
-                              ) : (
-                                <Text as="span" variant="bodySm" fontWeight="bold">
-                                  <span style={{ color: iconStyles.fg }}>{state === "attention" ? "!" : "○"}</span>
-                                </Text>
-                              )}
-                            </div>
-                            <Text as="span" variant="bodySm" tone={item.done ? undefined : "subdued"}>
-                              {item.label}
-                            </Text>
-                            {onItemClick && state === "attention" ? (
-                              <span style={{ marginLeft: "auto" }}>
-                                <Text as="span" variant="bodySm" fontWeight="semibold">
-                                  <span style={{ color: BRAND_ACCENT }}>Fix it ›</span>
-                                </Text>
-                              </span>
-                            ) : null}
-                          </InlineStack>
-                        );
-                      })}
+                      <SetupChecklist
+                        items={healthChecks.map((item) => ({
+                          label: item.label,
+                          done: item.done,
+                          onClick: checklistLinks[item.label],
+                        }))}
+                      />
 
                       {nextStep ? (
                         <Button

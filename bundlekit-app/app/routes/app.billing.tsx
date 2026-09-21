@@ -1,4 +1,4 @@
-import { Badge, Banner, BlockStack, Box, Button, InlineStack, Layout, Page, ProgressBar, Text } from "@shopify/polaris";
+import { Badge, Banner, BlockStack, Button, InlineStack, Layout, Page, ProgressBar, Text } from "@shopify/polaris";
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -9,6 +9,11 @@ import { getOfferLimit, PLANS, PLAN_FEATURES, PLAN_PRICE, type PlanKey } from ".
 import { friendlyErrorMessage } from "../lib/errors";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { PricingCard } from "../components/PricingCard";
+
+// The one plan to call out with the subtle orange "Most popular" accent —
+// per the brief, exactly one plan, never the current plan's own summary.
+const POPULAR_PLAN: PlanKey = "grow";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -72,44 +77,33 @@ export default function Billing() {
           </Layout.Section>
 
           <Layout.Section>
-            <InlineStack gap="400" wrap={false}>
+            <div className="bk-pricing-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+              <style>{`
+                @media (max-width: 900px) { .bk-pricing-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+                @media (max-width: 620px) { .bk-pricing-grid { grid-template-columns: 1fr !important; } }
+              `}</style>
               {(Object.keys(PLANS) as PlanKey[]).map((key) => (
-                <Box key={key} width="33%">
-                  <Panel highlighted={plan === key}>
-                    <BlockStack gap="300">
-                      <InlineStack align="space-between" blockAlign="center">
-                        <Text as="h3" variant="headingMd">{PLANS[key].name}</Text>
-                        {plan === key ? <Badge tone="success">Current</Badge> : null}
-                      </InlineStack>
-                      <Text as="p" variant="headingLg">
-                        {PLAN_PRICE[key]}
-                        <Text as="span" tone="subdued" variant="bodySm"> / month</Text>
-                      </Text>
-                      <BlockStack gap="150">
-                        {PLAN_FEATURES[key].map((feature) => (
-                          <Text as="p" variant="bodySm" key={feature}>· {feature}</Text>
-                        ))}
-                      </BlockStack>
-                      {plan !== key ? (
-                        <Button url={pricingPlansUrl} target="_top" fullWidth>
-                          {key === "free" ? "Downgrade" : "Select"}
-                        </Button>
-                      ) : null}
-                    </BlockStack>
-                  </Panel>
-                </Box>
+                <PricingCard
+                  key={key}
+                  name={PLANS[key].name}
+                  price={PLAN_PRICE[key]}
+                  features={PLAN_FEATURES[key]}
+                  isCurrent={plan === key}
+                  isPopular={key === POPULAR_PLAN}
+                  actionLabel={key === "free" ? "Downgrade" : "Start free trial"}
+                  actionUrl={pricingPlansUrl}
+                />
               ))}
-            </InlineStack>
+            </div>
           </Layout.Section>
 
           <Layout.Section>
             <Panel>
               <BlockStack gap="200">
-                <Text as="h3" variant="headingSm">Why am I leaving the app?</Text>
+                <Text as="h3" variant="headingSm">Secure Shopify billing</Text>
                 <Text as="p" tone="subdued" variant="bodySm">
-                  Plan selection is hosted by Shopify for security and consistency — you'll come right
-                  back to BundleKit once your plan is active. All plans can be cancelled anytime from
-                  your Shopify admin.
+                  Plan selection and billing are securely handled by Shopify. You'll return to BundleKit
+                  automatically after completing your selection.
                 </Text>
               </BlockStack>
             </Panel>

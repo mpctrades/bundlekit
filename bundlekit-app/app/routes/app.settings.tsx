@@ -7,13 +7,60 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate, apiVersion } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
+import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
+import { themeEditorDeepLink } from "../lib/theme";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/ToastProvider";
 
+const INTEGRATION_STATUS_COLORS = {
+  active: "#008060",
+  attention: "#B98900",
+  neutral: "#A39C89",
+} as const;
+
+// A row-level status readout — "Automatic discounts    ● Active" — distinct
+// from StatusPill (which badges an offer's own lifecycle state) since this
+// describes the shop's setup, not a single offer.
+function IntegrationStatusRow({
+  label,
+  state,
+  text,
+  url,
+}: {
+  label: string;
+  state: keyof typeof INTEGRATION_STATUS_COLORS;
+  text: string;
+  url?: string;
+}) {
+  const color = INTEGRATION_STATUS_COLORS[state];
+  const status = (
+    <InlineStack gap="150" blockAlign="center" wrap={false}>
+      <span style={{ width: 6, height: 6, minWidth: 6, borderRadius: "50%", background: color }} />
+      <Text as="span" variant="bodySm" fontWeight="medium">
+        <span style={{ color }}>{text}</span>
+      </Text>
+    </InlineStack>
+  );
+  return (
+    <InlineStack align="space-between" blockAlign="center">
+      <Text as="span" variant="bodySm">
+        {label}
+      </Text>
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+          {status}
+        </a>
+      ) : (
+        status
+      )}
+    </InlineStack>
+  );
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   // Settings edits real per-shop defaults — if the read fails we can't fake
   // plausible values without risking a merchant unknowingly overwriting
@@ -21,6 +68,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // the page renders as a plain error state instead of a form.
   try {
     const shop = await getOrCreateShop(session.shop);
+    // Same health check the Dashboard already runs — here purely to show
+    // the "Integration status" panel's Automatic discounts row.
+    const functionDeployed = await getFunctionId(admin, shop).then(
+      () => true,
+      () => false,
+    );
     return {
       ok: true as const,
       shopDomain: session.shop,
@@ -31,6 +84,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       combineOrderDefault: shop.combineOrderDefault,
       scopes: (session.scope ?? "").split(",").filter(Boolean),
       apiVersion,
+      functionDeployed,
     };
   } catch (error) {
     console.error("[bundlekit] settings loader failed", error);
@@ -154,6 +208,34 @@ export default function Settings() {
                     <Text as="p" variant="bodySm">
                       Installed: {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(data.installedAt))}
                     </Text>
+                  </BlockStack>
+                </Panel>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13, duration: 0.3 }}>
+                <Panel>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingMd">
+                      Integration status
+                    </Text>
+                    <BlockStack gap="150">
+                      <IntegrationStatusRow
+                        label="Automatic discounts"
+                        state={data.functionDeployed ? "active" : "attention"}
+                        text={data.functionDeployed ? "Active" : "Needs setup"}
+                      />
+                      <IntegrationStatusRow
+                        label="Theme block"
+                        state="neutral"
+                        text="Not verified"
+                        url={themeEditorDeepLink(data.shopDomain)}
+                      />
+                      <IntegrationStatusRow
+                        label="Permissions"
+                        state={data.scopes.length > 0 ? "active" : "attention"}
+                        text={data.scopes.length > 0 ? "Connected" : "Not connected"}
+                      />
+                    </BlockStack>
                   </BlockStack>
                 </Panel>
               </motion.div>

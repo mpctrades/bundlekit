@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { BlockStack, Box, Button, Collapsible, Icon, InlineStack, Layout, List, Page, Text } from "@shopify/polaris";
-import { ChevronDownIcon, EmailIcon } from "@shopify/polaris-icons";
+import { useMemo, useState } from "react";
+import { BlockStack, Box, Button, Icon, InlineStack, Layout, List, Page, Text, TextField } from "@shopify/polaris";
+import type { IconSource } from "@shopify/polaris";
+import { CartDiscountIcon, DiscountIcon, EmailIcon, FlagIcon, SearchIcon, ThemeTemplateIcon, WrenchIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { useLoaderData, useNavigate } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -8,6 +9,7 @@ import { authenticate } from "../shopify.server";
 import { themeEditorDeepLink } from "../lib/theme";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { HelpAccordionItem } from "../components/HelpAccordion";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -16,6 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 interface Topic {
   id: string;
+  icon: IconSource;
   title: string;
   body: React.ReactNode;
 }
@@ -24,6 +27,7 @@ function useTopics(themeEditor: string): Topic[] {
   return [
     {
       id: "getting-started",
+      icon: FlagIcon,
       title: "Getting started",
       body: (
         <List type="number">
@@ -35,6 +39,7 @@ function useTopics(themeEditor: string): Topic[] {
     },
     {
       id: "how-quantity-discounts-work",
+      icon: DiscountIcon,
       title: "How quantity discounts work",
       body: (
         <BlockStack gap="200">
@@ -49,6 +54,7 @@ function useTopics(themeEditor: string): Topic[] {
     },
     {
       id: "installing-theme-block",
+      icon: ThemeTemplateIcon,
       title: "Installing the theme block",
       body: (
         <BlockStack gap="200">
@@ -71,6 +77,7 @@ function useTopics(themeEditor: string): Topic[] {
     },
     {
       id: "discount-stacking",
+      icon: CartDiscountIcon,
       title: "Discount stacking",
       body: (
         <Text as="p">
@@ -82,6 +89,7 @@ function useTopics(themeEditor: string): Topic[] {
     },
     {
       id: "troubleshooting",
+      icon: WrenchIcon,
       title: "Troubleshooting",
       body: (
         <BlockStack gap="300">
@@ -125,6 +133,13 @@ export default function Help() {
   const themeEditor = themeEditorDeepLink(shopDomain);
   const topics = useTopics(themeEditor);
   const [openId, setOpenId] = useState<string | null>(topics[0]?.id ?? null);
+  const [query, setQuery] = useState("");
+
+  const filteredTopics = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return topics;
+    return topics.filter((topic) => topic.title.toLowerCase().includes(q));
+  }, [topics, query]);
 
   return (
     <Page>
@@ -133,45 +148,49 @@ export default function Help() {
 
         <Layout>
           <Layout.Section>
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-              <Panel padding="0px">
-                <BlockStack gap="0">
-                  {topics.map((topic, index) => {
-                    const isOpen = openId === topic.id;
-                    return (
-                      <Box
-                        key={topic.id}
-                        padding="400"
-                        borderBlockStartWidth={index === 0 ? undefined : "025"}
-                        borderColor="border-secondary"
-                      >
-                        <BlockStack gap="300">
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => setOpenId(isOpen ? null : topic.id)}
-                            onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && setOpenId(isOpen ? null : topic.id)}
-                            style={{ cursor: "pointer" }}
-                          >
-                            <InlineStack align="space-between" blockAlign="center">
-                              <Text as="h2" variant="headingSm">
-                                {topic.title}
-                              </Text>
-                              <div style={{ transform: isOpen ? "rotate(180deg)" : undefined, transition: "transform 150ms ease" }}>
-                                <Icon source={ChevronDownIcon} tone="subdued" />
-                              </div>
-                            </InlineStack>
-                          </div>
-                          <Collapsible id={topic.id} open={isOpen}>
-                            {topic.body}
-                          </Collapsible>
-                        </BlockStack>
-                      </Box>
-                    );
-                  })}
-                </BlockStack>
-              </Panel>
-            </motion.div>
+            <BlockStack gap="400">
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                <TextField
+                  label="Search help articles"
+                  labelHidden
+                  placeholder="Search help articles..."
+                  prefix={<Icon source={SearchIcon} tone="subdued" />}
+                  value={query}
+                  onChange={setQuery}
+                  autoComplete="off"
+                  clearButton
+                  onClearButtonClick={() => setQuery("")}
+                />
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <Panel padding="0px">
+                  {filteredTopics.length > 0 ? (
+                    <BlockStack gap="0">
+                      {filteredTopics.map((topic, index) => (
+                        <HelpAccordionItem
+                          key={topic.id}
+                          id={topic.id}
+                          icon={topic.icon}
+                          title={topic.title}
+                          isFirst={index === 0}
+                          isOpen={openId === topic.id}
+                          onToggle={() => setOpenId(openId === topic.id ? null : topic.id)}
+                        >
+                          {topic.body}
+                        </HelpAccordionItem>
+                      ))}
+                    </BlockStack>
+                  ) : (
+                    <Box padding="400">
+                      <Text as="p" tone="subdued" alignment="center">
+                        No help articles match "{query}".
+                      </Text>
+                    </Box>
+                  )}
+                </Panel>
+              </motion.div>
+            </BlockStack>
           </Layout.Section>
 
           <Layout.Section variant="oneThird">
@@ -182,12 +201,22 @@ export default function Help() {
                     Need help?
                   </Text>
                   <Text as="p" tone="subdued" variant="bodySm">
-                    Can't find what you're looking for, or something looks broken? We usually respond within 24
-                    hours.
+                    Can't find what you're looking for, or something looks broken?
                   </Text>
                   <Button icon={EmailIcon} url="mailto:team@mpctrades.com" target="_blank" fullWidth>
                     Contact support
                   </Button>
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    Typical response time: within 24 hours.
+                  </Text>
+                  <Box borderBlockStartWidth="025" borderColor="border-secondary" paddingBlockStart="300">
+                    <InlineStack gap="150" blockAlign="center">
+                      <span style={{ width: 6, height: 6, minWidth: 6, borderRadius: "50%", background: "#008060" }} />
+                      <Text as="span" variant="bodySm" fontWeight="medium">
+                        All systems operational
+                      </Text>
+                    </InlineStack>
+                  </Box>
                   <Button variant="plain" onClick={() => navigate("/app")}>
                     Back to dashboard
                   </Button>

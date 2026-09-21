@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import {
   bucketByDay,
@@ -15,6 +16,7 @@ import {
   summarizeByOffer,
   totalStats,
 } from "../lib/stats.server";
+import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { themeEditorDeepLink } from "../lib/theme";
@@ -23,6 +25,7 @@ import { Funnel, type FunnelStage } from "../components/Funnel";
 import { KpiCard } from "../components/KpiCard";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { SetupChecklist } from "../components/SetupChecklist";
 
 const RANGE_OPTIONS = [7, 30, 90];
 
@@ -32,14 +35,14 @@ const FALLBACK_CURRENCY = "EUR";
 const FALLBACK_ACCENT = "#FF4A1C";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("days"));
   const days = RANGE_OPTIONS.includes(requested) ? requested : 30;
 
   try {
     const shop = await getOrCreateShop(session.shop);
-    const [rows, previousRows] = await Promise.all([
+    const [rows, previousRows, liveCount, functionDeployed] = await Promise.all([
       fetchStatsForRange(shop.id, days),
       // Purely for the KPI cards' trend chips — never let a hiccup here
       // take down the numbers that matter.
@@ -47,6 +50,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         console.warn("[bundlekit] previous-period stats failed", error);
         return [];
       }),
+      // For the empty state's setup checklist only — same check the
+      // Dashboard already runs.
+      prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
+      getFunctionId(admin, shop).then(
+        () => true,
+        () => false,
+      ),
     ]);
     const totals = totalStats(rows);
     const previousTotals = totalStats(previousRows);
@@ -56,6 +66,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shopDomain: session.shop,
       currency: shop.currency,
       accent: shop.defaultAccent,
+      liveCount,
+      functionDeployed,
       totals,
       trends: {
         revenue: computeTrend(totals.revenue, previousTotals.revenue),
@@ -74,6 +86,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shopDomain: session.shop,
       currency: FALLBACK_CURRENCY,
       accent: FALLBACK_ACCENT,
+      liveCount: 0,
+      functionDeployed: false,
       totals: totalStats([]),
       trends: { revenue: null, orders: null, views: null, selects: null },
       buckets: bucketByDay([], days),
@@ -87,7 +101,8 @@ const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion",
 type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
 
 export default function Analytics() {
-  const { days, shopDomain, currency, accent, totals, trends, buckets, perOffer, error } = useLoaderData<typeof loader>();
+  const { days, shopDomain, currency, accent, liveCount, functionDeployed, totals, trends, buckets, perOffer, error } =
+    useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const themeEditor = themeEditorDeepLink(shopDomain);
   const hasActivity = totals.views > 0 || totals.selects > 0 || totals.orders > 0;
@@ -172,23 +187,34 @@ export default function Analytics() {
         {!hasActivity ? (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Panel>
-              <BlockStack gap="300" inlineAlign="center">
-                <Text as="h2" variant="headingMd">
-                  No bundle activity yet
-                </Text>
-                <Text as="p" tone="subdued" alignment="center">
-                  Revenue, orders, and widget activity will show up here once shoppers start seeing a live offer.
-                  A few things unlock that:
-                </Text>
-                <BlockStack gap="150" inlineAlign="center">
-                  <Text as="p">1. Publish an offer</Text>
-                  <Text as="p">2. Make sure BundleKit's automatic discount is activated</Text>
-                  <Text as="p">3. Install the BundleKit block on your product page</Text>
+              <BlockStack gap="300">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">
+                    No bundle activity yet
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Your analytics will appear after customers interact with a live BundleKit offer.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="200">
+                  <Text as="h3" variant="headingSm" tone="subdued">
+                    Setup status
+                  </Text>
+                  <SetupChecklist
+                    items={[
+                      { label: "Publish an offer", done: liveCount > 0, onClick: () => navigate("/app/offers") },
+                      {
+                        label: "Activate automatic discounts",
+                        done: functionDeployed,
+                        onClick: functionDeployed ? undefined : () => navigate("/app/help"),
+                      },
+                      { label: "Install BundleKit theme block", done: false, onClick: () => window.open(themeEditor, "_blank") },
+                    ]}
+                  />
                 </BlockStack>
                 <InlineStack gap="200">
-                  <Button onClick={() => navigate("/app/offers")}>View offers</Button>
                   <Button onClick={() => navigate("/app/help")}>Check setup</Button>
-                  <Button onClick={() => window.open(themeEditor, "_blank")}>Install theme block</Button>
+                  <Button onClick={() => navigate("/app/offers")}>View offers</Button>
                 </InlineStack>
               </BlockStack>
             </Panel>
@@ -267,7 +293,7 @@ export default function Analytics() {
                 headings={[
                   { title: "Offer" },
                   { title: "Views" },
-                  { title: "Selects" },
+                  { title: "Selections" },
                   { title: "Orders" },
                   { title: "Conversion" },
                   { title: "Revenue" },
