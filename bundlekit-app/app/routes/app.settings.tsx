@@ -7,24 +7,35 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate, apiVersion } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
+import { friendlyErrorMessage } from "../lib/errors";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/ToastProvider";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
 
-  return {
-    shopDomain: session.shop,
-    currency: shop.currency,
-    primaryLocale: shop.primaryLocale,
-    installedAt: shop.installedAt,
-    combineProductDefault: shop.combineProductDefault,
-    combineOrderDefault: shop.combineOrderDefault,
-    scopes: (session.scope ?? "").split(",").filter(Boolean),
-    apiVersion,
-  };
+  // Settings edits real per-shop defaults — if the read fails we can't fake
+  // plausible values without risking a merchant unknowingly overwriting
+  // real settings with fabricated ones, so this returns a distinct shape
+  // the page renders as a plain error state instead of a form.
+  try {
+    const shop = await getOrCreateShop(session.shop);
+    return {
+      ok: true as const,
+      shopDomain: session.shop,
+      currency: shop.currency,
+      primaryLocale: shop.primaryLocale,
+      installedAt: shop.installedAt,
+      combineProductDefault: shop.combineProductDefault,
+      combineOrderDefault: shop.combineOrderDefault,
+      scopes: (session.scope ?? "").split(",").filter(Boolean),
+      apiVersion,
+    };
+  } catch (error) {
+    console.error("[bundlekit] settings loader failed", error);
+    return { ok: false as const, error: friendlyErrorMessage(error) };
+  }
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -51,8 +62,8 @@ export default function Settings() {
   const busy = navigation.state === "submitting";
   const { showToast } = useToast();
 
-  const [combineProductDefault, setCombineProductDefault] = useState(data.combineProductDefault);
-  const [combineOrderDefault, setCombineOrderDefault] = useState(data.combineOrderDefault);
+  const [combineProductDefault, setCombineProductDefault] = useState(data.ok && data.combineProductDefault);
+  const [combineOrderDefault, setCombineOrderDefault] = useState(data.ok && data.combineOrderDefault);
   const [technicalOpen, setTechnicalOpen] = useState(false);
 
   useEffect(() => {
@@ -66,6 +77,19 @@ export default function Settings() {
     if (combineOrderDefault) form.set("combineOrderDefault", "on");
     submit(form, { method: "post" });
   };
+
+  if (!data.ok) {
+    return (
+      <Page>
+        <BlockStack gap="500">
+          <PageHeader eyebrow="Settings" title="Settings" subtitle="Defaults, shop info, and what BundleKit can access." />
+          <Banner tone="critical" title="Couldn't load settings">
+            {data.error}
+          </Banner>
+        </BlockStack>
+      </Page>
+    );
+  }
 
   return (
     <Page>

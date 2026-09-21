@@ -2,6 +2,7 @@ import { redirect, type LoaderFunctionArgs } from "react-router";
 import { motion } from "motion/react";
 import { Logo } from "../components/Logo";
 import { BRAND_ACCENT, PAGE_BACKGROUND } from "../lib/theme";
+import { PLANS, PLAN_FEATURES, PLAN_PRICE, type PlanKey } from "../lib/billing";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -23,12 +24,14 @@ export default function Index() {
       style={{
         minHeight: "100vh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        gap: 40,
         background: PAGE_BACKGROUND,
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
-        padding: 24,
+        padding: "48px 24px",
       }}
     >
       <motion.div
@@ -139,6 +142,67 @@ export default function Index() {
               </div>
             ))}
           </div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        id="pricing"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut", delay: 0.1 }}
+        style={{ width: "100%", maxWidth: 720 }}
+      >
+        <h2
+          style={{
+            fontSize: 20,
+            fontWeight: 700,
+            color: "#1a1a1a",
+            textAlign: "center",
+            margin: "0 0 20px",
+          }}
+        >
+          Plans &amp; pricing
+        </h2>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 16,
+            justifyContent: "center",
+          }}
+        >
+          {(Object.keys(PLANS) as PlanKey[]).map((key) => (
+            <div
+              key={key}
+              style={{
+                flex: "1 1 200px",
+                maxWidth: 220,
+                background: "#fff",
+                borderRadius: 16,
+                padding: "24px 20px",
+                boxShadow: "0 2px 8px rgba(26,26,26,0.06)",
+                border: "1px solid rgba(26,26,26,0.05)",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a", marginBottom: 4 }}>
+                {PLANS[key].name}
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: BRAND_ACCENT, marginBottom: 14 }}>
+                {PLAN_PRICE[key]}
+                <span style={{ fontSize: 12, fontWeight: 500, color: "#8a8a8a" }}> / month</span>
+              </div>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {PLAN_FEATURES[key].map((feature) => (
+                  <li
+                    key={feature}
+                    style={{ fontSize: 13, lineHeight: 1.6, color: "#6b6b6b", marginBottom: 4 }}
+                  >
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </motion.div>
     </div>

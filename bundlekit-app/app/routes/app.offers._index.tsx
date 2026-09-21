@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BlockStack, Box, Button, EmptyState, Icon, InlineStack, Page, Select, Text, TextField } from "@shopify/polaris";
+import { Banner, BlockStack, Box, Button, EmptyState, Icon, InlineStack, Page, Select, Text, TextField } from "@shopify/polaris";
 import { SearchIcon } from "@shopify/polaris-icons";
 import { useLoaderData, useNavigate } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -47,39 +47,61 @@ function summarizeTarget(targetType: string, targetIds: string[]): string {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const shop = await prisma.shop.upsert({
-    where: { domain: session.shop },
-    create: { domain: session.shop },
-    update: {},
-    include: {
-      offers: {
-        orderBy: { updatedAt: "desc" },
-        include: { stats: { orderBy: { day: "desc" }, take: 30 } },
+  try {
+    const shop = await prisma.shop.upsert({
+      where: { domain: session.shop },
+      create: { domain: session.shop },
+      update: {},
+      include: {
+        offers: {
+          orderBy: { updatedAt: "desc" },
+          include: { stats: { orderBy: { day: "desc" }, take: 30 } },
+        },
       },
-    },
-  });
+    });
 
-  const now = new Date();
+    const now = new Date();
 
-  return {
-    shopDomain: session.shop,
-    currency: shop.currency,
-    offers: shop.offers.map((offer) => {
-      const config = offer.config as unknown as OfferConfig;
-      return {
-        id: offer.id,
-        name: offer.name,
-        kind: offer.kind,
-        status: computeDisplayStatus(offer, now),
-        productCount: offer.productCount,
-        target: summarizeTarget(offer.targetType, offer.targetIds),
-        discount: summarizeDiscount(config),
-        views: offer.stats.reduce((sum, stat) => sum + stat.views, 0),
-        orders: offer.stats.reduce((sum, stat) => sum + stat.orders, 0),
-        revenue: offer.stats.reduce((sum, stat) => sum + Number(stat.revenue), 0),
-      };
-    }),
-  };
+    return {
+      shopDomain: session.shop,
+      currency: shop.currency,
+      offers: shop.offers.map((offer) => {
+        const config = offer.config as unknown as OfferConfig;
+        return {
+          id: offer.id,
+          name: offer.name,
+          kind: offer.kind,
+          status: computeDisplayStatus(offer, now),
+          productCount: offer.productCount,
+          target: summarizeTarget(offer.targetType, offer.targetIds),
+          discount: summarizeDiscount(config),
+          views: offer.stats.reduce((sum, stat) => sum + stat.views, 0),
+          orders: offer.stats.reduce((sum, stat) => sum + stat.orders, 0),
+          revenue: offer.stats.reduce((sum, stat) => sum + Number(stat.revenue), 0),
+        };
+      }),
+      error: null as string | null,
+    };
+  } catch (error) {
+    console.error("[bundlekit] offers list loader failed", error);
+    return {
+      shopDomain: session.shop,
+      currency: "EUR",
+      offers: [] as Array<{
+        id: string;
+        name: string;
+        kind: string;
+        status: DisplayStatus;
+        productCount: number;
+        target: string;
+        discount: string;
+        views: number;
+        orders: number;
+        revenue: number;
+      }>,
+      error: friendlyErrorMessage(error),
+    };
+  }
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -122,7 +144,7 @@ const STATUS_FILTER_OPTIONS: Array<{ label: string; value: string }> = [
 ];
 
 export default function OffersIndex() {
-  const { offers, shopDomain, currency } = useLoaderData<typeof loader>();
+  const { offers, shopDomain, currency, error } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -152,6 +174,8 @@ export default function OffersIndex() {
             </Button>
           }
         />
+
+        {error ? <Banner tone="critical" title="Couldn't load your offers">{error}</Banner> : null}
 
         <Panel padding="0px">
           {offers.length === 0 ? (

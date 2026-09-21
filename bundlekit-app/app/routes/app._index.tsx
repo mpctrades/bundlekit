@@ -1,4 +1,4 @@
-import { BlockStack, Box, Button, EmptyState, Icon, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
+import { Banner, BlockStack, Box, Button, EmptyState, Icon, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
 import { CashDollarIcon, ChartVerticalIcon, LiveIcon, OrderIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { useLoaderData, useNavigate } from "react-router";
@@ -9,11 +9,18 @@ import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
 import { BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
 import { bucketByDay, deriveRateMetrics, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
 import { getFunctionId } from "../lib/offers.server";
+import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { Chart } from "../components/Chart";
 import { KpiCard } from "../components/KpiCard";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+
+// Schema defaults (prisma/schema.prisma Shop model) — used only when the
+// dashboard's own data can't be read at all, so the page still renders
+// something coherent instead of crashing.
+const FALLBACK_CURRENCY = "EUR";
+const FALLBACK_ACCENT = "#FF4A1C";
 
 function greeting(hour: number): string {
   if (hour < 12) return "Good morning";
@@ -23,49 +30,73 @@ function greeting(hour: number): string {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
 
-  // Everything below is independent — same shop, same admin session, no
-  // step's result feeds another's input — so it all runs as one round trip
-  // instead of four chained ones. That used to be the dashboard's biggest
-  // latency cost: two live Admin API calls awaited back-to-back before the
-  // page could even start rendering.
-  const [syncedCurrency, offerCount, liveCount, rows, functionDeployed] = await Promise.all([
-    // Best-effort: the store's real currency, not the schema default. Never
-    // let a sync hiccup block the dashboard from loading.
-    syncShopInfo(admin, shop.id).catch((error) => {
-      console.warn("[bundlekit] shop info sync failed", error);
-      return undefined;
-    }),
-    prisma.offer.count({ where: { shopId: shop.id } }),
-    prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
-    fetchStatsForRange(shop.id, 30),
-    // getFunctionId throws when no Function is deployed yet — correct for a
-    // real publish, but this is only a health check, so reduce to a boolean.
-    // Cached on shop.functionId after the first successful lookup, so this
-    // skips the Admin API round trip entirely on every load thereafter.
-    getFunctionId(admin, shop).then(
-      () => true,
-      () => false,
-    ),
-  ]);
-  const currency = syncedCurrency ?? shop.currency;
+  // Everything past this point is app data (Postgres + Admin API), not
+  // auth — a hiccup here must degrade to an empty dashboard with a banner,
+  // never an uncaught 500 that takes down every button/link on the page.
+  try {
+    const shop = await getOrCreateShop(session.shop);
 
-  const totals = totalStats(rows);
+    // Everything below is independent — same shop, same admin session, no
+    // step's result feeds another's input — so it all runs as one round trip
+    // instead of four chained ones. That used to be the dashboard's biggest
+    // latency cost: two live Admin API calls awaited back-to-back before the
+    // page could even start rendering.
+    const [syncedCurrency, offerCount, liveCount, rows, functionDeployed] = await Promise.all([
+      // Best-effort: the store's real currency, not the schema default. Never
+      // let a sync hiccup block the dashboard from loading.
+      syncShopInfo(admin, shop.id).catch((error) => {
+        console.warn("[bundlekit] shop info sync failed", error);
+        return undefined;
+      }),
+      prisma.offer.count({ where: { shopId: shop.id } }),
+      prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
+      fetchStatsForRange(shop.id, 30),
+      // getFunctionId throws when no Function is deployed yet — correct for a
+      // real publish, but this is only a health check, so reduce to a boolean.
+      // Cached on shop.functionId after the first successful lookup, so this
+      // skips the Admin API round trip entirely on every load thereafter.
+      getFunctionId(admin, shop).then(
+        () => true,
+        () => false,
+      ),
+    ]);
+    const currency = syncedCurrency ?? shop.currency;
 
-  return {
-    shopDomain: session.shop,
-    currency,
-    accent: shop.defaultAccent,
-    offerCount,
-    liveCount,
-    functionDeployed,
-    totals,
-    rates: deriveRateMetrics(totals),
-    buckets: bucketByDay(rows, 30),
-    topOffers: summarizeByOffer(rows).slice(0, 5),
-    greeting: greeting(new Date().getHours()),
-  };
+    const totals = totalStats(rows);
+
+    return {
+      shopDomain: session.shop,
+      currency,
+      accent: shop.defaultAccent,
+      offerCount,
+      liveCount,
+      functionDeployed,
+      totals,
+      rates: deriveRateMetrics(totals),
+      buckets: bucketByDay(rows, 30),
+      topOffers: summarizeByOffer(rows).slice(0, 5),
+      greeting: greeting(new Date().getHours()),
+      error: null as string | null,
+    };
+  } catch (error) {
+    console.error("[bundlekit] dashboard loader failed", error);
+    const totals = totalStats([]);
+    return {
+      shopDomain: session.shop,
+      currency: FALLBACK_CURRENCY,
+      accent: FALLBACK_ACCENT,
+      offerCount: 0,
+      liveCount: 0,
+      functionDeployed: false,
+      totals,
+      rates: deriveRateMetrics(totals),
+      buckets: bucketByDay([], 30),
+      topOffers: [] as ReturnType<typeof summarizeByOffer>,
+      greeting: greeting(new Date().getHours()),
+      error: friendlyErrorMessage(error),
+    };
+  }
 };
 
 export default function Dashboard() {
@@ -81,6 +112,7 @@ export default function Dashboard() {
     buckets,
     topOffers,
     greeting: timeGreeting,
+    error,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
@@ -102,6 +134,7 @@ export default function Dashboard() {
       <Page>
         <BlockStack gap="500">
           <PageHeader eyebrow="Overview" title={`${timeGreeting} 👋`} subtitle="Here's how your BundleKit offers are performing." />
+          {error ? <Banner tone="critical" title="Couldn't load your dashboard data">{error}</Banner> : null}
           <Panel padding="0px">
             <EmptyState
               heading="Create your first offer"

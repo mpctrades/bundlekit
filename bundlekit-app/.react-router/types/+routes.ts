@@ -14,6 +14,9 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/privacy": {
+    params: {};
+  };
   "/auth/login": {
     params: {};
   };
@@ -68,11 +71,15 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/auth/login" | "/auth/*" | "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing" | "/app/help" | "/webhooks/app/uninstalled" | "/webhooks/app/scopes_update" | "/webhooks/orders/create" | "/webhooks/compliance" | "/api/beacon";
+    page: "/" | "/privacy" | "/auth/login" | "/auth/*" | "/app" | "/app/offers" | "/app/offers/:id" | "/app/design" | "/app/analytics" | "/app/settings" | "/app/billing" | "/app/help" | "/webhooks/app/uninstalled" | "/webhooks/app/scopes_update" | "/webhooks/orders/create" | "/webhooks/compliance" | "/api/beacon";
   };
   "routes/_index.tsx": {
     id: "routes/_index";
     page: "/";
+  };
+  "routes/privacy.tsx": {
+    id: "routes/privacy";
+    page: "/privacy";
   };
   "routes/auth.login.tsx": {
     id: "routes/auth.login";
@@ -143,6 +150,7 @@ type RouteFiles = {
 type RouteModules = {
   "root": typeof import("./app/root.tsx");
   "routes/_index": typeof import("./app/routes/_index.tsx");
+  "routes/privacy": typeof import("./app/routes/privacy.tsx");
   "routes/auth.login": typeof import("./app/routes/auth.login.tsx");
   "routes/auth.$": typeof import("./app/routes/auth.$.tsx");
   "routes/app": typeof import("./app/routes/app.tsx");

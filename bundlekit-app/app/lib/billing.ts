@@ -22,3 +22,17 @@ export type PlanKey = keyof typeof PLANS;
 export function getOfferLimit(plan: PlanKey): number {
   return PLANS[plan].offerLimit;
 }
+
+// Shared with the public landing page's pricing section so the two never
+// drift apart — this is the one place plan copy is written.
+export const PLAN_FEATURES: Record<PlanKey, string[]> = {
+  free: ["3 live offers", "Quantity discounts", "EN + FR storefront"],
+  grow: ["10 live offers", "Everything in Free", "Full analytics dashboard", "14-day free trial"],
+  pro: ["Unlimited offers", "Everything in Grow", "Priority support", "14-day free trial"],
+};
+
+export const PLAN_PRICE: Record<PlanKey, string> = {
+  free: "$0",
+  grow: "$4.99",
+  pro: "$9.99",
+};

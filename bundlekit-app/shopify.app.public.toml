@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "a8858b880781d71586cdb9d118edf02c"
-name = "BundleKit"
+name = "MPC BundleKit"
 application_url = "https://bundlekit.mpctrades.com"
 embedded = true
 

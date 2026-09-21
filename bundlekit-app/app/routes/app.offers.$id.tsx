@@ -58,7 +58,15 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   if (params.id === "new") {
     const [plan, offerCount] = await Promise.all([
       getActivePlan(admin),
-      prisma.offer.count({ where: { shopId: shop.id } }),
+      // Fails open, same as getActivePlan above: this is only the UI check
+      // that decides whether to show the builder or the "limit reached"
+      // empty state (the action re-checks for real before publishing), so a
+      // transient count failure must never be the thing that blocks a
+      // merchant from even opening the offer builder.
+      prisma.offer.count({ where: { shopId: shop.id } }).catch((error) => {
+        console.warn("[bundlekit] offer count check failed", error);
+        return 0;
+      }),
     ]);
     if (offerCount >= getOfferLimit(plan)) {
       return { limitReached: true as const, plan };

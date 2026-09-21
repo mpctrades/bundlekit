@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BlockStack, Box, ButtonGroup, Button, IndexTable, InlineGrid, InlineStack, Page, Text } from "@shopify/polaris";
+import { Banner, BlockStack, Box, ButtonGroup, Button, IndexTable, InlineGrid, InlineStack, Page, Text } from "@shopify/polaris";
 import type { IndexTableProps } from "@shopify/polaris";
 import { CashDollarIcon, CheckCircleIcon, OrderIcon, ViewIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
@@ -8,6 +8,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { bucketByDay, fetchStatsForRange, summarizeByOffer, totalStats } from "../lib/stats.server";
+import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { themeEditorDeepLink } from "../lib/theme";
 import { Chart } from "../components/Chart";
@@ -18,31 +19,51 @@ import { PageHeader } from "../components/PageHeader";
 
 const RANGE_OPTIONS = [7, 30, 90];
 
+// Schema defaults (prisma/schema.prisma Shop model) — used only when the
+// shop's own data can't be read at all.
+const FALLBACK_CURRENCY = "EUR";
+const FALLBACK_ACCENT = "#FF4A1C";
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("days"));
   const days = RANGE_OPTIONS.includes(requested) ? requested : 30;
 
-  const rows = await fetchStatsForRange(shop.id, days);
+  try {
+    const shop = await getOrCreateShop(session.shop);
+    const rows = await fetchStatsForRange(shop.id, days);
 
-  return {
-    days,
-    shopDomain: session.shop,
-    currency: shop.currency,
-    accent: shop.defaultAccent,
-    totals: totalStats(rows),
-    buckets: bucketByDay(rows, days),
-    perOffer: summarizeByOffer(rows),
-  };
+    return {
+      days,
+      shopDomain: session.shop,
+      currency: shop.currency,
+      accent: shop.defaultAccent,
+      totals: totalStats(rows),
+      buckets: bucketByDay(rows, days),
+      perOffer: summarizeByOffer(rows),
+      error: null as string | null,
+    };
+  } catch (error) {
+    console.error("[bundlekit] analytics loader failed", error);
+    return {
+      days,
+      shopDomain: session.shop,
+      currency: FALLBACK_CURRENCY,
+      accent: FALLBACK_ACCENT,
+      totals: totalStats([]),
+      buckets: bucketByDay([], days),
+      perOffer: [] as ReturnType<typeof summarizeByOffer>,
+      error: friendlyErrorMessage(error),
+    };
+  }
 };
 
 const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion", "revenue"] as const;
 type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
 
 export default function Analytics() {
-  const { days, shopDomain, currency, accent, totals, buckets, perOffer } = useLoaderData<typeof loader>();
+  const { days, shopDomain, currency, accent, totals, buckets, perOffer, error } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const themeEditor = themeEditorDeepLink(shopDomain);
   const hasActivity = totals.views > 0 || totals.selects > 0 || totals.orders > 0;
@@ -120,6 +141,8 @@ export default function Analytics() {
             </ButtonGroup>
           }
         />
+
+        {error ? <Banner tone="critical" title="Couldn't load analytics">{error}</Banner> : null}
 
         {!hasActivity ? (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>

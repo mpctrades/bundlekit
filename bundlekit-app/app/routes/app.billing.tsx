@@ -1,43 +1,37 @@
-import { Badge, BlockStack, Box, Button, InlineStack, Layout, Page, ProgressBar, Text } from "@shopify/polaris";
+import { Badge, Banner, BlockStack, Box, Button, InlineStack, Layout, Page, ProgressBar, Text } from "@shopify/polaris";
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { getActivePlan, getPricingPlansUrl } from "../lib/billing.server";
-import { getOfferLimit, PLANS, type PlanKey } from "../lib/billing";
+import { getOfferLimit, PLANS, PLAN_FEATURES, PLAN_PRICE, type PlanKey } from "../lib/billing";
+import { friendlyErrorMessage } from "../lib/errors";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
-  const [plan, offerCount] = await Promise.all([
-    getActivePlan(admin),
-    prisma.offer.count({ where: { shopId: shop.id } }),
-  ]);
+  const pricingPlansUrl = getPricingPlansUrl(session.shop);
 
-  return {
-    plan,
-    offerCount,
-    pricingPlansUrl: getPricingPlansUrl(session.shop),
-  };
-};
+  // getActivePlan() already fails open to "free" internally — the only
+  // remaining risk here is Postgres (getOrCreateShop / the offer count).
+  try {
+    const shop = await getOrCreateShop(session.shop);
+    const [plan, offerCount] = await Promise.all([
+      getActivePlan(admin),
+      prisma.offer.count({ where: { shopId: shop.id } }),
+    ]);
 
-const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  free: ["3 live offers", "Quantity discounts", "EN + FR storefront"],
-  grow: ["10 live offers", "Everything in Free", "Full analytics dashboard", "14-day free trial"],
-  pro: ["Unlimited offers", "Everything in Grow", "Priority support", "14-day free trial"],
-};
-
-const PLAN_PRICE: Record<PlanKey, string> = {
-  free: "$0",
-  grow: "$4.99",
-  pro: "$9.99",
+    return { plan, offerCount, pricingPlansUrl, error: null as string | null };
+  } catch (error) {
+    console.error("[bundlekit] billing loader failed", error);
+    return { plan: "free" as PlanKey, offerCount: 0, pricingPlansUrl, error: friendlyErrorMessage(error) };
+  }
 };
 
 export default function Billing() {
-  const { plan, offerCount, pricingPlansUrl } = useLoaderData<typeof loader>();
+  const { plan, offerCount, pricingPlansUrl, error } = useLoaderData<typeof loader>();
   const limit = getOfferLimit(plan);
   const usagePct = Number.isFinite(limit) ? Math.min(100, (offerCount / limit) * 100) : 0;
 
@@ -49,6 +43,12 @@ export default function Billing() {
           title="Plans & billing"
           subtitle="Your current plan, usage, and how to change it."
         />
+
+        {error ? (
+          <Banner tone="critical" title="Couldn't load your current plan">
+            {error} Showing the Free plan as a placeholder — your actual plan and usage may differ.
+          </Banner>
+        ) : null}
 
         <Layout>
           <Layout.Section variant="oneThird">
