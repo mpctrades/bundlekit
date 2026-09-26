@@ -16,6 +16,11 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  future: {
+    // Non-expiring offline tokens are deprecated (Dev Dashboard alert).
+    // Needs the refreshToken columns in prisma/schema.prisma.
+    expiringOfflineAccessTokens: true,
+  },
 });
 
 export default shopify;
