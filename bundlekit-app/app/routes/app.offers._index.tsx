@@ -10,6 +10,7 @@ import {
   deleteOffer,
   duplicateOffer,
   pauseOffer,
+  reconcileLiveOffers,
   resumeOffer,
   type DisplayStatus,
   type OfferConfig,
@@ -45,9 +46,16 @@ function summarizeTarget(targetType: string, targetIds: string[]): string {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   try {
+    // Before listing: any "Live" offer whose Shopify discount is gone goes
+    // back to draft, so this page never shows a live offer checkout ignores.
+    const { id: shopId } = await getOrCreateShop(session.shop);
+    await reconcileLiveOffers(admin, shopId).catch((error) => {
+      console.warn("[bundlekit] offer reconcile failed", error);
+    });
+
     const shop = await prisma.shop.upsert({
       where: { domain: session.shop },
       create: { domain: session.shop },

@@ -17,7 +17,7 @@ import {
   summarizeByOffer,
   totalStats,
 } from "../lib/stats.server";
-import { getFunctionId } from "../lib/offers.server";
+import { getFunctionId, reconcileLiveOffers } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { Chart } from "../components/Chart";
@@ -45,7 +45,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // auth — a hiccup here must degrade to an empty dashboard with a banner,
   // never an uncaught 500 that takes down every button/link on the page.
   try {
-    const shop = await getOrCreateShop(session.shop);
+    let shop = await getOrCreateShop(session.shop);
+    // Live offers must have a real Shopify discount behind them; reset any
+    // that don't (and the stale Function id) before computing the checklist.
+    const reset = await reconcileLiveOffers(admin, shop.id).catch((error) => {
+      console.warn("[bundlekit] offer reconcile failed", error);
+      return 0;
+    });
+    if (reset > 0) shop = await getOrCreateShop(session.shop);
 
     // Everything below is independent — same shop, same admin session, no
     // step's result feeds another's input — so it all runs as one round trip

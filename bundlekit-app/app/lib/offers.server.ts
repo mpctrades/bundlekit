@@ -292,6 +292,11 @@ const DISCOUNT_UPDATE = `#graphql
     }
   }`;
 
+const DISCOUNTS_EXIST = `#graphql
+  query BundleDiscountsExist($ids: [ID!]!) {
+    nodes(ids: $ids) { id }
+  }`;
+
 const DISCOUNT_ACTIVATE = `#graphql
   mutation ActivateBundleDiscount($id: ID!) {
     discountAutomaticActivate(id: $id) {
@@ -342,6 +347,46 @@ export async function getFunctionId(
   return functionId;
 }
 
+/** Discount gids from `ids` that no longer exist on the shop. */
+export async function findMissingDiscounts(admin: AdminApiContext, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const response = await admin.graphql(DISCOUNTS_EXIST, { variables: { ids } });
+  const body = await response.json();
+  const found = new Set(
+    ((body.data?.nodes ?? []) as Array<{ id: string } | null>).filter(Boolean).map((node) => node!.id),
+  );
+  return new Set(ids.filter((id) => !found.has(id)));
+}
+
+/**
+ * Keeps "Live" honest. An offer is only live while its Shopify discount
+ * exists — otherwise the widget promises a price checkout won't give. Any
+ * live offer whose discount has disappeared is moved back to draft (and its
+ * stale gid and Function id dropped), so the merchant sees it and a single
+ * Publish recreates it. Returns how many offers were reset.
+ */
+export async function reconcileLiveOffers(admin: AdminApiContext, shopId: string): Promise<number> {
+  const live = await prisma.offer.findMany({
+    where: { shopId, status: "live" },
+    select: { id: true, discountGid: true },
+  });
+  const withGid = live.filter((offer) => offer.discountGid);
+  const missing = await findMissingDiscounts(admin, withGid.map((offer) => offer.discountGid!));
+  const stale = live.filter((offer) => !offer.discountGid || missing.has(offer.discountGid));
+  if (!stale.length) return 0;
+
+  await prisma.$transaction([
+    prisma.offer.updateMany({
+      where: { id: { in: stale.map((offer) => offer.id) } },
+      data: { status: "draft", discountGid: null },
+    }),
+    // A vanished discount usually means its Function was replaced too.
+    prisma.shop.update({ where: { id: shopId }, data: { functionId: null } }),
+  ]);
+  console.warn(`[bundlekit] reset ${stale.length} live offer(s) whose Shopify discount no longer exists`);
+  return stale.length;
+}
+
 /**
  * One discount per offer. Its config metafield carries the tiers, so the
  * Function needs no database and no network at checkout time.
@@ -376,7 +421,11 @@ export async function syncDiscount(
     ],
   };
 
-  if (offer.discountGid) {
+  // The stored discount can vanish outside BundleKit: a merchant deletes it
+  // in Shopify admin, or Shopify removes it with a replaced Function (app
+  // reinstall, dev preview). Updating a missing discount only errors, which
+  // would leave the offer stuck forever — so create a fresh one instead.
+  if (offer.discountGid && (await findMissingDiscounts(admin, [offer.discountGid])).size === 0) {
     const response = await admin.graphql(DISCOUNT_UPDATE, {
       variables: { id: offer.discountGid, discount: input },
     });
@@ -483,10 +532,19 @@ export async function publishOffer(
   ]);
 
   await writeOfferToProducts(admin, productIds, config);
-  const discountGid = await syncDiscount(admin, offer, config, functionId, combinesWith, {
-    startsAt,
-    endsAt: schedule.endsAt,
-  });
+  const discountSchedule = { startsAt, endsAt: schedule.endsAt };
+  let discountGid: string;
+  try {
+    discountGid = await syncDiscount(admin, offer, config, functionId, combinesWith, discountSchedule);
+  } catch (error) {
+    // The cached Function id outlives the Function after a reinstall or
+    // redeploy that replaces it. Re-discover it once and retry.
+    if (!offer.shop.functionId) throw error;
+    const freshId = await findFunctionId(admin);
+    if (freshId === functionId) throw error;
+    await prisma.shop.update({ where: { id: offer.shopId }, data: { functionId: freshId } });
+    discountGid = await syncDiscount(admin, offer, config, freshId, combinesWith, discountSchedule);
+  }
 
   return prisma.offer.update({
     where: { id: offerId },
