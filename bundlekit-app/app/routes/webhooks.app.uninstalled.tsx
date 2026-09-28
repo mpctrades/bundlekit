@@ -8,12 +8,12 @@ import prisma from "../db.server";
  * theme. All that is left for us is to forget the shop.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, session, topic } = await authenticate.webhook(request);
+  const { shop, topic } = await authenticate.webhook(request);
   console.log(`[bundlekit] ${topic} for ${shop}`);
 
-  if (session) {
-    await prisma.session.deleteMany({ where: { shop } });
-    await prisma.shop.deleteMany({ where: { domain: shop } }); // cascades offers + stats
-  }
+  // Unconditional: Shopify retries this webhook, and a retry arrives after
+  // the session is already gone — the shop row must still be cleaned up.
+  await prisma.session.deleteMany({ where: { shop } });
+  await prisma.shop.deleteMany({ where: { domain: shop } }); // cascades offers + stats
   return new Response();
 };

@@ -12,8 +12,6 @@
 {%- assign offer = product.metafields.bundlekit.offer.value -%}
 
 {%- if offer != blank and offer.tiers.size > 0 -%}
-  {{ 'bundlekit.css' | asset_url | stylesheet_tag }}
-
   <div
     class="bundlekit{% if block.settings.card_style == 'soft' %} bundlekit--soft{% endif %}"
     data-bundlekit
@@ -94,7 +92,7 @@
     </div>
   </div>
 
-  <script src="{{ 'bundlekit.js' | asset_url }}" defer></script>
+  {%- comment -%} bundlekit.js / .css load once via the schema's javascript/stylesheet keys. {%- endcomment -%}
 {%- endif -%}
 
 {% schema %}

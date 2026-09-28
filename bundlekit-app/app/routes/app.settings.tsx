@@ -9,7 +9,7 @@ import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
-import { themeEditorDeepLink } from "../lib/theme";
+import { useThemeEditorDeepLink } from "../lib/theme";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/ToastProvider";
@@ -110,6 +110,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function Settings() {
   const data = useLoaderData<typeof loader>();
+  const themeEditor = useThemeEditorDeepLink("shopDomain" in data ? String(data.shopDomain) : "");
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
@@ -228,7 +229,7 @@ export default function Settings() {
                         label="Theme block"
                         state="neutral"
                         text="Not verified"
-                        url={themeEditorDeepLink(data.shopDomain)}
+                        url={themeEditor}
                       />
                       <IntegrationStatusRow
                         label="Permissions"

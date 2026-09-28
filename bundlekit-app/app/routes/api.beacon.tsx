@@ -11,10 +11,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.public.appProxy(request);
   if (!session) return new Response(null, { status: 401 });
 
-  const { offerId, event } = (await request.json()) as {
-    offerId: string;
-    event: "view" | "select";
-  };
+  let offerId: unknown;
+  let event: unknown;
+  try {
+    ({ offerId, event } = (await request.json()) as { offerId?: unknown; event?: unknown });
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+  if (typeof offerId !== "string" || (event !== "view" && event !== "select")) {
+    return new Response(null, { status: 400 });
+  }
 
   const day = new Date();
   day.setUTCHours(0, 0, 0, 0);

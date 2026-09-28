@@ -7,7 +7,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop, syncShopInfo } from "../lib/shop.server";
-import { themeEditorDeepLink } from "../lib/theme";
+import { useThemeEditorDeepLink } from "../lib/theme";
 import {
   bucketByDay,
   computeTrend,
@@ -149,7 +149,7 @@ export default function Dashboard() {
     setTimeGreeting(greeting(new Date().getHours()));
   }, []);
 
-  const themeEditor = themeEditorDeepLink(shopDomain);
+  const themeEditor = useThemeEditorDeepLink(shopDomain);
 
   const healthChecks = [
     { label: "Publish an offer", done: liveCount > 0 },

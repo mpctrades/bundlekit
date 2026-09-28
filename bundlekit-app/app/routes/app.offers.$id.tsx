@@ -42,7 +42,7 @@ import {
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
 import { getActivePlan } from "../lib/billing.server";
 import { getOfferLimit } from "../lib/billing";
-import { BORDER, BRAND_ACCENT, themeEditorDeepLink } from "../lib/theme";
+import { BORDER, BRAND_ACCENT, useThemeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
@@ -396,6 +396,7 @@ function ProductAccessBanner({ shopDomain }: { shopDomain: string }) {
 
 export default function OfferBuilder() {
   const data = useLoaderData<typeof loader>();
+  const themeEditor = useThemeEditorDeepLink("shopDomain" in data ? data.shopDomain ?? "" : "");
   const navigate = useNavigate();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -915,7 +916,7 @@ export default function OfferBuilder() {
                     template. You place it once, for all products.
                   </Text>
                   <Button
-                    url={themeEditorDeepLink(shopDomain)}
+                    url={themeEditor}
                     target="_blank"
                   >
                     Open the theme editor

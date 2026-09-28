@@ -115,3 +115,13 @@ model OfferStat {
 
   @@unique([offerId, day])
 }
+
+// Shopify delivers webhooks at least once and retries on timeouts. Order
+// attribution records each delivery id here so a retry can't count the same
+// order's revenue twice. Rows older than a few days can be pruned freely.
+model ProcessedWebhook {
+  id         String   @id // X-Shopify-Webhook-Id
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
+}

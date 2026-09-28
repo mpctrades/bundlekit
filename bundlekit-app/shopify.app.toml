@@ -9,8 +9,9 @@ embedded = true
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 #   read_products / write_products -> read the catalog, write the offer metafield
 #   write_discounts               -> create the automatic discount the Function runs
-#   read_orders                   -> revenue attribution only (Pro analytics)
-scopes = "read_products,write_products,write_discounts,read_orders"
+#   read_orders                   -> revenue attribution (orders/create webhook)
+#   write_app_proxy               -> storefront view/selection beacons (/apps/bundlekit)
+scopes = "read_products,write_products,write_discounts,read_orders,write_app_proxy"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
@@ -32,12 +33,15 @@ api_version = "2026-07"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
-  # orders/create payloads carry customer PII (email, address), which also
-  # falls under Protected Customer Data approval — see note below. Commented
-  # out alongside the compliance topics until that's requested.
-  # [[webhooks.subscriptions]]
-  # topics = [ "orders/create" ]
-  # uri = "/webhooks/orders/create"
+  # Revenue attribution for Analytics. include_fields trims the payload to
+  # the line items we read, so no customer PII reaches the app. Orders are
+  # protected customer data: this subscription needs Protected customer data
+  # access (level 0, no customer fields) granted in the Partner Dashboard
+  # before `shopify app deploy` will accept it.
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create" ]
+  uri = "/webhooks/orders/create"
+  include_fields = [ "id", "line_items" ]
 
   # All three mandatory GDPR compliance webhooks. These are required for App
   # Store review regardless of whether the app stores customer data — the
@@ -48,6 +52,13 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   uri = "/webhooks/compliance"
+
+# Storefront beacons: https://{shop}/apps/bundlekit/beacon -> /api/beacon.
+# Shopify signs every proxied request (authenticate.public.appProxy).
+[app_proxy]
+url = "/api"
+prefix = "apps"
+subpath = "bundlekit"
 
 [pos]
 embedded = false

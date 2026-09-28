@@ -1,69 +1,56 @@
-import { useState } from "react";
-import { Form, useActionData, useLoaderData } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import {
   AppProvider as PolarisAppProvider,
+  BlockStack,
   Button,
   Card,
-  FormLayout,
   Page,
   Text,
-  TextField,
 } from "@shopify/polaris";
 import polarisTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
-import { LoginErrorType } from "@shopify/shopify-app-react-router/server";
-import type { LoginError } from "@shopify/shopify-app-react-router/server";
 import { login } from "../shopify.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
-function errorMessage(errors: LoginError) {
-  if (errors.shop === LoginErrorType.MissingShop) return "Enter your shop domain to log in.";
-  if (errors.shop === LoginErrorType.InvalidShop) return "Enter a valid shop domain, e.g. my-shop.myshopify.com.";
-  return undefined;
-}
-
+/**
+ * App Store requirement 2.3.1: the app must never ask a merchant to type
+ * their myshopify.com domain. Installs and logins always start from a
+ * Shopify-owned surface (App Store listing, Shopify admin), which pass
+ * `?shop=` for us — so the only thing this route does with a shop is hand it
+ * straight to OAuth. Without one, it points the merchant back to Shopify.
+ */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const errors = await login(request);
-  return { errors };
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = await login(request);
-  return { errors };
+  const url = new URL(request.url);
+  if (url.searchParams.get("shop")) {
+    const errors = await login(request);
+    // login() throws its redirect on success; reaching here means the shop
+    // param was invalid — fall through to the same "open from Shopify" page.
+    if (!errors || Object.keys(errors).length === 0) throw redirect("/app");
+  }
+  return null;
 };
 
 export default function AuthLogin() {
-  const { errors: loaderErrors } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const errors = actionData?.errors ?? loaderErrors;
-  const [shop, setShop] = useState("");
-
   return (
     <PolarisAppProvider i18n={polarisTranslations}>
       <Page narrowWidth>
         <Card>
-          <Form method="post">
-            <FormLayout>
-              <Text variant="headingMd" as="h2">
-                Log in to BundleKit
-              </Text>
-              <TextField
-                type="text"
-                name="shop"
-                label="Shop domain"
-                helpText="e.g. my-shop-domain.myshopify.com"
-                value={shop}
-                onChange={setShop}
-                autoComplete="on"
-                error={errorMessage(errors)}
-              />
-              <Button submit variant="primary">
-                Log in
+          <BlockStack gap="300">
+            <Text variant="headingMd" as="h2">
+              Open BundleKit from your Shopify admin
+            </Text>
+            <Text as="p" tone="subdued">
+              BundleKit runs inside Shopify. Open it from Apps → BundleKit in your
+              Shopify admin, or install it from the Shopify App Store.
+            </Text>
+            <div>
+              <Button url="https://admin.shopify.com" target="_top" variant="primary">
+                Go to Shopify admin
               </Button>
-            </FormLayout>
-          </Form>
+            </div>
+          </BlockStack>
         </Card>
       </Page>
     </PolarisAppProvider>

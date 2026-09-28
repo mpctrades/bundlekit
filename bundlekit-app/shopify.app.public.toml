@@ -7,7 +7,7 @@ embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,write_discounts,read_orders"
+scopes = "read_products,write_products,write_discounts,read_orders,write_app_proxy"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
@@ -29,9 +29,26 @@ api_version = "2026-07"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
+  # Revenue attribution for Analytics. include_fields trims the payload to
+  # the line items we read, so no customer PII reaches the app. Orders are
+  # protected customer data: this subscription needs Protected customer data
+  # access (level 0, no customer fields) granted in the Partner Dashboard
+  # before `shopify app deploy` will accept it.
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create" ]
+  uri = "/webhooks/orders/create"
+  include_fields = [ "id", "line_items" ]
+
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   uri = "/webhooks/compliance"
+
+# Storefront beacons: https://{shop}/apps/bundlekit/beacon -> /api/beacon.
+# Shopify signs every proxied request (authenticate.public.appProxy).
+[app_proxy]
+url = "/api"
+prefix = "apps"
+subpath = "bundlekit"
 
 [pos]
 embedded = false

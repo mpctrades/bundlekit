@@ -151,6 +151,10 @@
   /* ---------------- the widget ---------------- */
 
   function mount(root) {
+    // boot() re-runs on theme-editor events; never mount the same root twice
+    // (duplicate listeners, duplicate view beacons).
+    if (root.hasAttribute("data-bundlekit-mounted")) return;
+    root.setAttribute("data-bundlekit-mounted", "");
     var offerRaw = readJson(root, "[data-bundlekit-offer]");
     var offer = offerRaw && offerRaw.value ? offerRaw.value : offerRaw;
     var productData = readJson(root, "[data-bundlekit-product]");

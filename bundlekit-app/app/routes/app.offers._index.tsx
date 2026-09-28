@@ -21,7 +21,7 @@ import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { OfferActionsMenu } from "../components/OfferActionsMenu";
-import { BORDER, BRAND_ACCENT, INK_SOFT, themeEditorDeepLink } from "../lib/theme";
+import { BORDER, BRAND_ACCENT, INK_SOFT, useThemeEditorDeepLink } from "../lib/theme";
 
 const CELL_PADDING = "14px 20px";
 
@@ -149,7 +149,7 @@ export default function OffersIndex() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
 
-  const themeEditor = themeEditorDeepLink(shopDomain);
+  const themeEditor = useThemeEditorDeepLink(shopDomain);
 
   const filtered = useMemo(
     () =>

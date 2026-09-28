@@ -19,7 +19,7 @@ import {
 import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
-import { themeEditorDeepLink } from "../lib/theme";
+import { useThemeEditorDeepLink } from "../lib/theme";
 import { Chart } from "../components/Chart";
 import { Funnel, type FunnelStage } from "../components/Funnel";
 import { KpiCard } from "../components/KpiCard";
@@ -104,7 +104,7 @@ export default function Analytics() {
   const { days, shopDomain, currency, accent, liveCount, functionDeployed, totals, trends, buckets, perOffer, error } =
     useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const themeEditor = themeEditorDeepLink(shopDomain);
+  const themeEditor = useThemeEditorDeepLink(shopDomain);
   const hasActivity = totals.views > 0 || totals.selects > 0 || totals.orders > 0;
   const [searchParams] = useSearchParams();
   const [sortColumnIndex, setSortColumnIndex] = useState(5); // Revenue, matching the server's default order

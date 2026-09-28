@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { useLoaderData, useNavigate } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { themeEditorDeepLink } from "../lib/theme";
+import { useThemeEditorDeepLink } from "../lib/theme";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { HelpAccordionItem } from "../components/HelpAccordion";
@@ -130,7 +130,7 @@ function useTopics(themeEditor: string): Topic[] {
 export default function Help() {
   const { shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const themeEditor = themeEditorDeepLink(shopDomain);
+  const themeEditor = useThemeEditorDeepLink(shopDomain);
   const topics = useTopics(themeEditor);
   const [openId, setOpenId] = useState<string | null>(topics[0]?.id ?? null);
   const [query, setQuery] = useState("");
