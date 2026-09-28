@@ -72,7 +72,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // the "Integration status" panel's Automatic discounts row.
     const functionDeployed = await getFunctionId(admin, shop).then(
       () => true,
-      () => false,
+      (error) => {
+        console.warn("[bundlekit] function lookup failed", error);
+        return false;
+      },
     );
     return {
       ok: true as const,

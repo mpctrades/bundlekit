@@ -74,7 +74,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       // skips the Admin API round trip entirely on every load thereafter.
       getFunctionId(admin, shop).then(
         () => true,
-        () => false,
+        (error) => {
+          console.warn("[bundlekit] function lookup failed", error);
+          return false;
+        },
       ),
     ]);
     const currency = syncedCurrency ?? shop.currency;

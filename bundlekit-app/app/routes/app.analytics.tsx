@@ -55,7 +55,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
       getFunctionId(admin, shop).then(
         () => true,
-        () => false,
+        (error) => {
+          console.warn("[bundlekit] function lookup failed", error);
+          return false;
+        },
       ),
     ]);
     const totals = totalStats(rows);

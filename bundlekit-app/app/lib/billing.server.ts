@@ -46,6 +46,6 @@ export async function getActivePlan(admin: AdminApiContext): Promise<PlanKey> {
  */
 export function getPricingPlansUrl(shopDomain: string): string {
   const storeHandle = shopDomain.replace(/\.myshopify\.com$/, "");
-  const appHandle = process.env.SHOPIFY_APP_HANDLE || "bundlekit";
+  const appHandle = process.env.SHOPIFY_APP_HANDLE || "bundlekit-24";
   return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
 }
