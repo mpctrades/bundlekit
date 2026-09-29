@@ -147,12 +147,43 @@
     }
   }
 
+  /** Liquid's `t` filter HTML-escapes translations ("Bundle &amp; save"),
+   *  and we render with textContent, so decode entities once up front. */
+  function decodeStrings(strings) {
+    var scratch = document.createElement("textarea");
+    Object.keys(strings).forEach(function (key) {
+      if (typeof strings[key] !== "string") return;
+      scratch.innerHTML = strings[key];
+      strings[key] = scratch.value;
+    });
+    return strings;
+  }
+
+  var ADD_FORM = "form[action*='/cart/add']";
+  var SUBMIT = "[type='submit'], button[name='add']";
+
   function productForm(root) {
-    // The nearest real add-to-cart form. Themes differ; this covers OS 2.0.
-    return (
-      root.closest("form[action*='/cart/add']") ||
-      document.querySelector("form[action*='/cart/add']:not([hidden])")
-    );
+    // The nearest real add-to-cart form — the one with a submit button. Dawn
+    // renders a hidden-by-design installments form (also /cart/add, no
+    // button) *before* the product form, so "first match" picks the wrong
+    // one and the shopper's tier choice never reaches the cart.
+    var own = root.closest(ADD_FORM);
+    if (own) return own;
+    var scope = root.closest(".shopify-section, section") || document;
+    var forms = scope.querySelectorAll(ADD_FORM);
+    if (!forms.length && scope !== document) forms = document.querySelectorAll(ADD_FORM);
+    for (var i = 0; i < forms.length; i++) {
+      if (!forms[i].hidden && forms[i].querySelector(SUBMIT)) return forms[i];
+    }
+    return forms[0] || null;
+  }
+
+  /** form.elements also sees inputs tied to the form by a `form="…"`
+   *  attribute, which is how OS 2.0 themes place the quantity selector. */
+  function formField(form, name) {
+    var field = form.elements.namedItem(name);
+    if (field && typeof field.length === "number" && !field.tagName) field = field[0];
+    return field || null;
   }
 
   /* ---------------- the widget ---------------- */
@@ -165,7 +196,7 @@
     var offerRaw = readJson(root, "[data-bundlekit-offer]");
     var offer = offerRaw && offerRaw.value ? offerRaw.value : offerRaw;
     var productData = readJson(root, "[data-bundlekit-product]");
-    var strings = readJson(root, "[data-bundlekit-strings]") || {};
+    var strings = decodeStrings(readJson(root, "[data-bundlekit-strings]") || {});
     var settings = readJson(root, "[data-bundlekit-settings]") || {};
     var container = root.querySelector("[data-bundlekit-root]");
 
@@ -180,7 +211,7 @@
     var selectedIndex = indexOfBadged(tiers);
 
     function currentVariant() {
-      var input = form && form.querySelector("[name='id']");
+      var input = form && formField(form, "id");
       var id = input ? Number(input.value) : productData.selected;
       for (var i = 0; i < productData.variants.length; i++) {
         if (productData.variants[i].id === id) return productData.variants[i];
@@ -274,8 +305,8 @@
       if (!form) return;
 
       var quantity = selectedIndex === -1 ? 1 : tiers[selectedIndex].quantity;
-      var input = form.querySelector("[name='quantity']");
-      if (input) {
+      var input = formField(form, "quantity");
+      if (input && !input.hasAttribute("data-bundlekit-qty")) {
         input.value = String(quantity);
         input.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
@@ -294,8 +325,10 @@
       tagLine(form, offerId);
 
       if (settings.updateButtonLabel === false) return;
-      var button = form.querySelector("[type='submit'], button[name='add']");
-      if (!button) return;
+      var button = form.querySelector(SUBMIT);
+      // A disabled button is "Sold out" / "Unavailable" — never relabel it
+      // into something that reads like it can be clicked.
+      if (!button || button.disabled) return;
 
       var priced =
         selectedIndex === -1
