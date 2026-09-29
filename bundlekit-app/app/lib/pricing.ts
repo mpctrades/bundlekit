@@ -90,7 +90,10 @@ export function priceTier(unitPriceCents: number, tier: Tier): PricedTier {
     total,
     savings,
     perUnit: roundHalfUp(total / quantity),
-    percentOff: subtotal === 0 ? 0 : round2((savings / subtotal) * 100),
+    // A percentage tier shows the merchant's own number: deriving it back
+    // from rounded cents turns "15%" into "14.99%" on some prices.
+    percentOff:
+      subtotal === 0 ? 0 : tier.type === "percentage" ? clampPercent(tier.value) : round2((savings / subtotal) * 100),
     badge: Boolean(tier.badge),
   };
 }

@@ -146,3 +146,16 @@ describe("allocateSavings", () => {
     expect(allocateSavings([1000, 2000], 0)).toEqual([0, 0]);
   });
 });
+
+describe("percentOff display", () => {
+  it("shows a percentage tier's own number, not one derived from rounded cents", () => {
+    // 3 × €19.90 = €59.70; 15% off rounds to €50.75, which back-computes to 14.99%.
+    const priced = priceTier(1990, { quantity: 3, type: "percentage", value: 15 });
+    expect(priced.total).toBe(5075);
+    expect(priced.percentOff).toBe(15);
+  });
+
+  it("still derives the percentage for amount-off tiers", () => {
+    expect(priceTier(1000, { quantity: 2, type: "amount", value: 500 }).percentOff).toBe(25);
+  });
+});

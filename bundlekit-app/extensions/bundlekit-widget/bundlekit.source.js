@@ -56,7 +56,14 @@
       total: total,
       savings: savings,
       perUnit: roundHalfUp(total / quantity),
-      percentOff: subtotal === 0 ? 0 : Math.round((savings / subtotal) * 10000) / 100,
+      // Percentage tiers show the configured number, not one derived from
+      // rounded cents (which turns 15% into 14.99%).
+      percentOff:
+        subtotal === 0
+          ? 0
+          : tier.type === "percentage"
+            ? clampPercent(tier.value)
+            : Math.round((savings / subtotal) * 10000) / 100,
       badge: Boolean(tier.badge),
     };
   }
