@@ -198,7 +198,13 @@ const DEFINITION_CREATE = `#graphql
     }
   }`;
 
-/** Idempotent. Storefront read access is what lets Liquid see the offer. */
+/**
+ * Idempotent. The definition is what makes the value typed JSON — without
+ * it the metafield is an untyped string, `offer.tiers` is nil in Liquid, and
+ * the block renders nothing. `bundlekit` is a merchant-owned namespace, and
+ * Shopify only accepts `access.admin` on app-owned (`$app`) definitions: asking
+ * for it made every create fail, so only storefront access is set here.
+ */
 export async function ensureMetafieldDefinition(admin: AdminApiContext) {
   const response = await admin.graphql(DEFINITION_CREATE, {
     variables: {
@@ -209,7 +215,7 @@ export async function ensureMetafieldDefinition(admin: AdminApiContext) {
         description: "Offer shown by the BundleKit product-page widget.",
         ownerType: "PRODUCT",
         type: "json",
-        access: { admin: "MERCHANT_READ", storefront: "PUBLIC_READ" },
+        access: { storefront: "PUBLIC_READ" },
       },
     },
   });
@@ -217,7 +223,7 @@ export async function ensureMetafieldDefinition(admin: AdminApiContext) {
   const errors = body.data?.metafieldDefinitionCreate?.userErrors ?? [];
   // TAKEN just means we already created it on a previous save.
   const real = errors.filter((error: { code?: string }) => error.code !== "TAKEN");
-  if (real.length) console.warn("[bundlekit] definition warnings", real);
+  if (real.length) console.error("[bundlekit] offer metafield definition failed", real);
 }
 
 export async function writeOfferToProducts(
