@@ -26,8 +26,10 @@ export function getOfferLimit(plan: PlanKey): number {
 // Shared with the public landing page's pricing section so the two never
 // drift apart — this is the one place plan copy is written.
 export const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  free: ["3 live offers", "All discount types and targeting", "Analytics dashboard", "EN + FR storefront"],
-  grow: ["10 live offers", "Everything in Free", "14-day free trial"],
+  // Mirrors the plan descriptions on Shopify's Managed Pricing page word for
+  // word, so the app, website and plan page never disagree.
+  free: ["3 live offers", "Quantity discounts", "EN + FR storefront"],
+  grow: ["10 live offers", "Everything in Free", "Full analytics dashboard", "14-day free trial"],
   pro: ["Unlimited live offers", "Everything in Grow", "Priority support", "14-day free trial"],
 };
 
