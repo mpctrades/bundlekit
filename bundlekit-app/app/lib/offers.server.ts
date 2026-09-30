@@ -258,6 +258,52 @@ export async function writeOfferToProducts(
   }
 }
 
+/**
+ * The storefront widget reads its look from each offer's metafield, which is
+ * only written on Publish. Saving the Design page calls this so the change
+ * shows on live offers straight away instead of after every offer is
+ * republished. Accent stays per offer — the offer builder owns it.
+ */
+export async function applyShopDesignToLiveOffers(
+  admin: AdminApiContext,
+  shop: {
+    id: string;
+    defaultRadius: number;
+    defaultShowTrustLine: boolean;
+    defaultSavingsDisplay: string;
+    defaultCardStyle: string;
+    defaultWidgetTitle: string;
+    defaultBadgeText: string;
+  },
+) {
+  const live = await prisma.offer.findMany({
+    where: { shopId: shop.id, status: "live" },
+    select: { id: true, config: true, resolvedProductIds: true },
+  });
+  for (const offer of live) {
+    const current = offer.config as unknown as OfferConfig;
+    const config: OfferConfig = {
+      ...current,
+      title: { ...current.title, en: shop.defaultWidgetTitle },
+      design: {
+        ...current.design,
+        radius: shop.defaultRadius,
+        showTrustLine: shop.defaultShowTrustLine,
+        savingsDisplay: shop.defaultSavingsDisplay,
+        cardStyle: shop.defaultCardStyle,
+      },
+      labels: {
+        ...current.labels,
+        en: { ...current.labels?.en, badge: shop.defaultBadgeText },
+      },
+    };
+    await prisma.offer.update({ where: { id: offer.id }, data: { config: config as never } });
+    if (offer.resolvedProductIds.length) {
+      await writeOfferToProducts(admin, offer.resolvedProductIds, config);
+    }
+  }
+}
+
 export async function clearOfferFromProducts(admin: AdminApiContext, productIds: string[]) {
   for (const batch of chunk(productIds, 25)) {
     await admin.graphql(METAFIELD_DELETE, {

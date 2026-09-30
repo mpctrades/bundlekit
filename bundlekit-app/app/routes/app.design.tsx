@@ -7,6 +7,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
+import { applyShopDesignToLiveOffers } from "../lib/offers.server";
 import { DEFAULT_TIERS, normaliseTiers, priceTier } from "../lib/pricing";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
@@ -29,32 +30,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
+  const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
+  try {
+    const shop = await getOrCreateShop(session.shop);
+    const radius = Number(form.get("defaultRadius"));
 
-  const defaultAccent = String(form.get("defaultAccent") || shop.defaultAccent);
-  const defaultRadius = Math.min(24, Math.max(0, Number(form.get("defaultRadius") || shop.defaultRadius)));
-  const defaultShowTrustLine = form.get("defaultShowTrustLine") === "on";
-  const defaultBadgeText = String(form.get("defaultBadgeText") || shop.defaultBadgeText);
-  const defaultWidgetTitle = String(form.get("defaultWidgetTitle") || shop.defaultWidgetTitle);
-  const defaultSavingsDisplay = String(form.get("defaultSavingsDisplay") || shop.defaultSavingsDisplay);
-  const defaultCardStyle = String(form.get("defaultCardStyle") || shop.defaultCardStyle);
-
-  await prisma.shop.update({
-    where: { id: shop.id },
-    data: {
-      defaultAccent,
-      defaultRadius,
-      defaultShowTrustLine,
-      defaultBadgeText,
-      defaultWidgetTitle,
-      defaultSavingsDisplay,
-      defaultCardStyle,
-    },
-  });
-
-  return { ok: true };
+    const updated = await prisma.shop.update({
+      where: { id: shop.id },
+      data: {
+        defaultAccent: String(form.get("defaultAccent") || shop.defaultAccent),
+        defaultRadius: Number.isFinite(radius) ? Math.min(24, Math.max(0, radius)) : shop.defaultRadius,
+        defaultShowTrustLine: form.get("defaultShowTrustLine") === "on",
+        defaultBadgeText: String(form.get("defaultBadgeText") || shop.defaultBadgeText),
+        defaultWidgetTitle: String(form.get("defaultWidgetTitle") || shop.defaultWidgetTitle),
+        defaultSavingsDisplay: String(form.get("defaultSavingsDisplay") || shop.defaultSavingsDisplay),
+        defaultCardStyle: String(form.get("defaultCardStyle") || shop.defaultCardStyle),
+      },
+    });
+    await applyShopDesignToLiveOffers(admin, updated);
+    return { ok: true };
+  } catch (error) {
+    console.error("[bundlekit] design save failed", error);
+    return { error: "Your design couldn't be saved. Please try again." };
+  }
 };
 
 export default function Design() {
@@ -104,7 +103,12 @@ export default function Design() {
 
         {actionData && "ok" in actionData ? (
           <Banner tone="success" title="Saved">
-            <p>New offers will start with these defaults. Existing offers keep what they already have.</p>
+            <p>Your live offers now use this design. Each offer keeps its own accent colour.</p>
+          </Banner>
+        ) : null}
+        {actionData && "error" in actionData ? (
+          <Banner tone="critical" title="Not saved">
+            <p>{actionData.error}</p>
           </Banner>
         ) : null}
 

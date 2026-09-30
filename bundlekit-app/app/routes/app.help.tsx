@@ -209,14 +209,6 @@ export default function Help() {
                   <Text as="p" tone="subdued" variant="bodySm">
                     Typical response time: within 24 hours.
                   </Text>
-                  <Box borderBlockStartWidth="025" borderColor="border-secondary" paddingBlockStart="300">
-                    <InlineStack gap="150" blockAlign="center">
-                      <span style={{ width: 6, height: 6, minWidth: 6, borderRadius: "50%", background: "#008060" }} />
-                      <Text as="span" variant="bodySm" fontWeight="medium">
-                        All systems operational
-                      </Text>
-                    </InlineStack>
-                  </Box>
                   <Button variant="plain" onClick={() => navigate("/app")}>
                     Back to dashboard
                   </Button>

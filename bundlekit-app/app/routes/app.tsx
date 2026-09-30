@@ -24,7 +24,11 @@ export default function App() {
   // the reload guards so a future (unrelated) transient error gets its own
   // single automatic retry instead of silently no-op'ing.
   if (typeof window !== "undefined") {
-    window.sessionStorage.removeItem("bk:app-error-response-reload");
+    try {
+      window.sessionStorage.removeItem("bk:app-error-response-reload");
+    } catch {
+      // Storage blocked (incognito / third-party storage off) — nothing to clear.
+    }
   }
   return (
     <AppProvider apiKey={apiKey}>
@@ -87,9 +91,14 @@ export function ErrorBoundary() {
 
 function reloadOnce(key: string) {
   if (typeof window === "undefined") return;
-  // Guard against a genuinely broken route reloading forever.
-  if (window.sessionStorage.getItem(key)) return;
-  window.sessionStorage.setItem(key, "1");
+  // Guard against a genuinely broken route reloading forever. Without
+  // storage there is no guard, so don't auto-reload at all.
+  try {
+    if (window.sessionStorage.getItem(key)) return;
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    return;
+  }
   window.location.reload();
 }
 

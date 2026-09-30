@@ -114,7 +114,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
   const form = await request.formData();
   const intent = String(form.get("intent") || "");
   const offerId = String(form.get("offerId") || "");
@@ -122,6 +121,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!offerId) return { error: "Missing offer." };
 
   try {
+    const shop = await getOrCreateShop(session.shop);
     if (intent === "duplicate") await duplicateOffer(offerId, shop.id);
     else if (intent === "pause") await pauseOffer(admin, offerId);
     else if (intent === "resume") await resumeOffer(admin, offerId);

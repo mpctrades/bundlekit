@@ -26,6 +26,12 @@ const ACTIVE_SUBSCRIPTION = `#graphql
  * be the thing that breaks the offer builder.
  */
 export async function getActivePlan(admin: AdminApiContext): Promise<PlanKey> {
+  return (await lookupActivePlan(admin)) ?? "free";
+}
+
+/** Like getActivePlan, but null when the lookup itself failed — so a
+ *  limit check can tell "on Free" apart from "couldn't ask Shopify". */
+export async function lookupActivePlan(admin: AdminApiContext): Promise<PlanKey | null> {
   try {
     const response = await admin.graphql(ACTIVE_SUBSCRIPTION);
     const body = await response.json();
@@ -33,8 +39,9 @@ export async function getActivePlan(admin: AdminApiContext): Promise<PlanKey> {
     const active = subscriptions.find((sub: { status: string }) => sub.status === "ACTIVE");
     if (!active) return "free";
     return NAME_TO_PLAN[active.name] ?? "free";
-  } catch {
-    return "free";
+  } catch (error) {
+    console.error("[bundlekit] plan lookup failed", error);
+    return null;
   }
 }
 

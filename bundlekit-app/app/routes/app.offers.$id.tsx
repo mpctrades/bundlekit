@@ -40,7 +40,7 @@ import {
   type OfferConfig,
 } from "../lib/offers.server";
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
-import { getActivePlan } from "../lib/billing.server";
+import { getActivePlan, lookupActivePlan } from "../lib/billing.server";
 import { getOfferLimit } from "../lib/billing";
 import { BORDER, BRAND_ACCENT, useThemeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
@@ -182,10 +182,11 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   // a direct POST (or a stale tab) must not be able to create past it.
   if (params.id === "new") {
     const [plan, offerCount] = await Promise.all([
-      getActivePlan(admin),
+      lookupActivePlan(admin),
       prisma.offer.count({ where: { shopId: shop.id } }),
     ]);
-    if (offerCount >= getOfferLimit(plan)) {
+    // A failed plan lookup must not lock a paying merchant out of creating.
+    if (plan && offerCount >= getOfferLimit(plan)) {
       return { error: "You've reached your plan's offer limit. Upgrade to add more offers." };
     }
   }
@@ -243,7 +244,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
     v: 1,
     id: offerId ?? "pending",
     kind: "quantity",
-    title: { en: "Bundle & save", fr: "Pack & économies" },
+    title: { en: shop.defaultWidgetTitle, fr: "Pack & économies" },
     discountLabel: `BundleKit — ${name}`,
     tiers,
     design: {

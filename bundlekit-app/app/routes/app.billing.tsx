@@ -90,7 +90,7 @@ export default function Billing() {
                   features={PLAN_FEATURES[key]}
                   isCurrent={plan === key}
                   isPopular={key === POPULAR_PLAN}
-                  actionLabel={key === "free" ? "Downgrade" : "Start free trial"}
+                  actionLabel={key === "free" ? "Downgrade" : plan === "free" ? "Start free trial" : "Switch plan"}
                   actionUrl={pricingPlansUrl}
                 />
               ))}

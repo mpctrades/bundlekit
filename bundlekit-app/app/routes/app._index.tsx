@@ -164,7 +164,8 @@ export default function Dashboard() {
   const healthChecks = [
     { label: "Publish an offer", done: liveCount > 0 },
     { label: "Activate automatic discounts", done: functionDeployed },
-    { label: "Add BundleKit to your product page", done: false, manual: true },
+    // A storefront view beacon only exists once the block is on a product page.
+    { label: "Add BundleKit to your product page", done: totals.views > 0, manual: true },
   ];
   const doneCount = healthChecks.filter((item) => item.done).length;
   const allHealthy = doneCount === healthChecks.length;

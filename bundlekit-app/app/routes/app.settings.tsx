@@ -97,16 +97,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shop = await getOrCreateShop(session.shop);
   const form = await request.formData();
-
-  await prisma.shop.update({
-    where: { id: shop.id },
-    data: {
-      combineProductDefault: form.get("combineProductDefault") === "on",
-      combineOrderDefault: form.get("combineOrderDefault") === "on",
-    },
-  });
+  try {
+    const shop = await getOrCreateShop(session.shop);
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: {
+        combineProductDefault: form.get("combineProductDefault") === "on",
+        combineOrderDefault: form.get("combineOrderDefault") === "on",
+      },
+    });
+  } catch (error) {
+    console.error("[bundlekit] settings save failed", error);
+    return { error: "Your settings couldn't be saved. Please try again." };
+  }
 
   return { ok: true };
 };
@@ -164,6 +168,11 @@ export default function Settings() {
         />
 
         {actionData && "ok" in actionData ? <Banner tone="success" title="Saved" /> : null}
+        {actionData && "error" in actionData ? (
+          <Banner tone="critical" title="Not saved">
+            <p>{actionData.error}</p>
+          </Banner>
+        ) : null}
 
         <Layout>
           <Layout.Section>

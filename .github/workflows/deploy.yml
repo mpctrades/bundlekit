@@ -1,6 +1,8 @@
-# Deploys bundlekit-app on every push to main that touches bundlekit-app/.
-# (This repo is a monorepo — bundlekit-web, the static marketing site, is
-# not covered by this workflow.)
+# Deploys bundlekit-app on every push to main that touches bundlekit-app/ or
+# bundlekit-web/. bundlekit-web (the static marketing site + privacy policy)
+# is copied into nginx's web root by the server-deploy job; before that it
+# was copied by hand and the live site drifted (privacy.html was never
+# published, and fixed pricing copy never went live).
 #
 # Two independent things get deployed here, in parallel, after the build
 # gate passes:
@@ -37,6 +39,8 @@
 #                            i.e. the parent of bundlekit-app/ and
 #                            bundlekit-web/ (default: /home/devteam02/apps/bundlekit)
 #     BUNDLEKIT_SERVICE   - systemd unit name (default: bundlekit.service)
+#     BUNDLEKIT_WEB_ROOT  - nginx root for the marketing site
+#                            (default: /var/www/bundlekit)
 #
 # The server checkout must already have its own untracked .env inside
 # bundlekit-app/ with the real secrets (SHOPIFY_API_KEY, SHOPIFY_API_SECRET,
@@ -49,6 +53,7 @@ on:
     branches: [main]
     paths:
       - "bundlekit-app/**"
+      - "bundlekit-web/**"
   workflow_dispatch: {}
 
 concurrency:
@@ -122,5 +127,10 @@ jobs:
             npm run build
 
             sudo systemctl restart "${{ vars.BUNDLEKIT_SERVICE || 'bundlekit.service' }}"
+
+            # Marketing site + privacy policy. The App Store listing links
+            # to /privacy.html, so a missing file here is a review failure.
+            WEB_ROOT="${{ vars.BUNDLEKIT_WEB_ROOT || '/var/www/bundlekit' }}"
+            sudo install -m 644 ../bundlekit-web/index.html ../bundlekit-web/privacy.html "$WEB_ROOT/"
 
             echo "Deployed $(git rev-parse --short HEAD)"
