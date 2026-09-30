@@ -15,13 +15,13 @@
  * admin, and both sides read the same source of truth.
  */
 
-import { lineDiscountCents, normaliseTiers } from "./pricing.js";
+import { applyPercentage, normaliseTiers, priceTier, tierForQuantity } from "./pricing.js";
 
 /** @typedef {import("../generated/api").RunInput} RunInput */
 /** @typedef {import("../generated/api").FunctionRunResult} FunctionRunResult */
 
 const EMPTY = /** @type {FunctionRunResult} */ ({
-  discountApplicationStrategy: "FIRST",
+  discountApplicationStrategy: "ALL",
   discounts: [],
 });
 
@@ -40,9 +40,14 @@ export function run(input) {
   if (config.kind === "companion") {
     const bundleDiscount = companionDiscount(lines, config);
     if (bundleDiscount) discounts.push(bundleDiscount);
-    return discounts.length ? { discountApplicationStrategy: "FIRST", discounts } : EMPTY;
+    return discounts.length ? { discountApplicationStrategy: "ALL", discounts } : EMPTY;
   }
 
+  // The widget promises "3 units, save 15%" per product, so the tier is
+  // reached by the product's total quantity — 2 Red + 1 Blue counts as 3 —
+  // not by each cart line on its own.
+  /** @type {Map<string, { tiers: any[], lines: Array<{ id: string, quantity: number, unitPrice: number }> }>} */
+  const groups = new Map();
   for (const line of lines) {
     if (line.merchandise.__typename !== "ProductVariant") continue;
 
@@ -51,26 +56,48 @@ export function run(input) {
     if (!offer || offer.id !== config.offerId) continue;
 
     const unitPrice = toCents(line.cost?.amountPerQuantity?.amount);
-    if (!unitPrice) continue;
+    if (!unitPrice || line.quantity <= 0) continue;
 
-    const lineTiers = normaliseTiers(offer.tiers || tiers);
-    const saving = lineDiscountCents(unitPrice, line.quantity, lineTiers);
-    if (saving <= 0) continue;
-
-    discounts.push({
-      targets: [{ cartLine: { id: line.id } }],
-      value: {
-        fixedAmount: {
-          amount: fromCents(saving),
-          // The saving is already computed for the whole line.
-          appliesToEachItem: false,
-        },
-      },
-      message: label(config, lineTiers, line.quantity),
-    });
+    const productId = line.merchandise.product.id;
+    const group = groups.get(productId) ?? { tiers: normaliseTiers(offer.tiers || tiers), lines: [] };
+    group.lines.push({ id: line.id, quantity: line.quantity, unitPrice });
+    groups.set(productId, group);
   }
 
-  return discounts.length ? { discountApplicationStrategy: "FIRST", discounts } : EMPTY;
+  for (const group of groups.values()) {
+    const quantity = group.lines.reduce((sum, line) => sum + line.quantity, 0);
+    const tier = tierForQuantity(quantity, group.tiers);
+    if (!tier) continue;
+    const message = label(config, group.tiers, quantity);
+
+    // Amount / fixed-price tiers apply per complete bundle, like the widget.
+    let eligible = tier.type === "percentage" ? quantity : Math.floor(quantity / tier.quantity) * tier.quantity;
+    for (const line of group.lines) {
+      const units = Math.min(line.quantity, eligible);
+      eligible -= units;
+      if (units <= 0) continue;
+
+      const saving =
+        tier.type === "percentage"
+          ? line.unitPrice * units - applyPercentage(line.unitPrice * units, tier.value)
+          : Math.round((priceTier(line.unitPrice, tier).savings * units) / tier.quantity);
+      if (saving <= 0) continue;
+
+      discounts.push({
+        targets: [{ cartLine: { id: line.id } }],
+        value: {
+          fixedAmount: {
+            amount: fromCents(saving),
+            // The saving is already computed for the whole line.
+            appliesToEachItem: false,
+          },
+        },
+        message,
+      });
+    }
+  }
+
+  return discounts.length ? { discountApplicationStrategy: "ALL", discounts } : EMPTY;
 }
 
 /**

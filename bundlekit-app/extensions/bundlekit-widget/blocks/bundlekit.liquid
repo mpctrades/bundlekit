@@ -21,14 +21,20 @@
 {%- assign bk_heading = block.settings.heading | default: offer.title[bk_lang] | default: bk_heading_fallback -%}
 {%- assign bk_badge = block.settings.badge_text | default: offer.labels[bk_lang].badge | default: bk_badge_fallback -%}
 
-{%- if offer != blank and offer.tiers.size > 0 -%}
+{%- comment -%} Outside a scheduled offer's window the discount isn't running, so neither is the widget. {%- endcomment -%}
+{%- assign bk_now = 'now' | date: '%s' | plus: 0 -%}
+{%- assign bk_active = true -%}
+{%- if offer.startsAt and bk_now < offer.startsAt -%}{%- assign bk_active = false -%}{%- endif -%}
+{%- if offer.endsAt and bk_now > offer.endsAt -%}{%- assign bk_active = false -%}{%- endif -%}
+
+{%- if offer != blank and offer.tiers.size > 0 and bk_active -%}
   <div
     class="bundlekit{% if offer.design.cardStyle == 'soft' %} bundlekit--soft{% endif %}"
     data-bundlekit
     data-offer-id="{{ offer.id }}"
     data-locale="{{ request.locale.iso_code | default: 'en' }}"
-    data-money-format="{{ shop.money_format | escape }}"
-    data-proxy="{{ shop.url }}/apps/bundlekit"
+    data-money-format="{{ shop.money_format | strip_html | escape }}"
+    data-proxy="/apps/bundlekit"
     style="
       --bk-accent: {{ offer.design.accent | default: '#FF4A1C' }};
       --bk-radius: {{ offer.design.radius | default: 10 }}px;
@@ -113,6 +119,7 @@
     <strong style="color:#303030;">BundleKit</strong> —
     {%- if product == blank %} open a product to preview the widget.
     {%- elsif bk_raw == blank %} no live BundleKit offer targets this product. Publish an offer for it in the BundleKit app, or preview a product that has one.
+    {%- elsif bk_active == false %} this product's offer is scheduled and isn't running right now, so the widget is hidden until its start date.
     {%- else %} this product's offer couldn't be read (type: {{ bk_raw.type | default: 'unknown' }}). Re-publish the offer in the BundleKit app.
     {%- endif %}
   </div>

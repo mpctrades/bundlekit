@@ -282,6 +282,10 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
 
   let offer;
   try {
+    // An offer id from the URL is only trusted if it belongs to this shop.
+    if (offerId && !(await prisma.offer.findFirst({ where: { id: offerId, shopId: shop.id }, select: { id: true } }))) {
+      return { error: "This offer doesn't exist." };
+    }
     offer = offerId
       ? await prisma.offer.update({
           where: { id: offerId },
@@ -323,6 +327,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
         { productDiscounts: combineProduct, orderDiscounts: combineOrder, shippingDiscounts: true },
         candidateProductIds,
         { startsAt: offer.startsAt, endsAt: offer.endsAt },
+        shop.id,
       );
 
       const overridden = conflicts.filter((conflict) => conflict.winner === "other");

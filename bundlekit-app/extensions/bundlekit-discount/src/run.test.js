@@ -19,7 +19,7 @@ function cart(lines) {
   };
 }
 
-function line(quantity, { price = "19.90", offer = OFFER, id = "gid://shopify/CartLine/1" } = {}) {
+function line(quantity, { price = "19.90", offer = OFFER, id = "gid://shopify/CartLine/1", product = "gid://shopify/Product/1" } = {}) {
   return {
     id,
     quantity,
@@ -29,7 +29,7 @@ function line(quantity, { price = "19.90", offer = OFFER, id = "gid://shopify/Ca
       __typename: "ProductVariant",
       id: "gid://shopify/ProductVariant/1",
       product: {
-        id: "gid://shopify/Product/1",
+        id: product,
         offer: offer ? { value: JSON.stringify(offer) } : null,
       },
     },
@@ -37,6 +37,31 @@ function line(quantity, { price = "19.90", offer = OFFER, id = "gid://shopify/Ca
 }
 
 describe("run", () => {
+  it("applies every qualifying line, not just the first", () => {
+    const result = run(
+      cart([line(2), line(2, { id: "gid://shopify/CartLine/2", product: "gid://shopify/Product/2" })]),
+    );
+    expect(result.discountApplicationStrategy).toBe("ALL");
+    expect(result.discounts.map((d) => d.value.fixedAmount.amount)).toEqual(["3.98", "3.98"]);
+  });
+
+  it("reaches a tier with variants of one product added on separate lines", () => {
+    // 2 Red + 1 Blue = 3 units of the product: the 15% tier, on both lines.
+    const result = run(cart([line(2), line(1, { id: "gid://shopify/CartLine/2" })]));
+    expect(result.discounts.map((d) => d.value.fixedAmount.amount)).toEqual(["5.97", "2.98"]);
+    // Same total the widget shows for 3 units: save 8.95.
+    const total = result.discounts.reduce((sum, d) => sum + Number(d.value.fixedAmount.amount), 0);
+    expect(total).toBeCloseTo(8.95, 2);
+  });
+
+  it("splits a per-bundle amount tier across lines by complete bundles only", () => {
+    const offer = { id: "off_1", tiers: [{ quantity: 2, type: "amount", value: 500 }] };
+    // 3 units -> one complete bundle of 2 -> $5 off in total.
+    const result = run(cart([line(1, { offer }), line(2, { offer, id: "gid://shopify/CartLine/2" })]));
+    const total = result.discounts.reduce((sum, d) => sum + Number(d.value.fixedAmount.amount), 0);
+    expect(total).toBeCloseTo(5, 2);
+  });
+
   it("does nothing without a config", () => {
     const result = run({ cart: { lines: [line(3)] }, discountNode: { config: null } });
     expect(result.discounts).toHaveLength(0);

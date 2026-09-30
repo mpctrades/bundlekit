@@ -77,8 +77,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         return false;
       },
     );
+    // A storefront view beacon only exists once the block is on a product page.
+    const widgetSeen = (await prisma.offerStat.count({ where: { offer: { shopId: shop.id }, views: { gt: 0 } } })) > 0;
     return {
       ok: true as const,
+      widgetSeen,
       shopDomain: session.shop,
       currency: shop.currency,
       primaryLocale: shop.primaryLocale,
@@ -239,8 +242,8 @@ export default function Settings() {
                       />
                       <IntegrationStatusRow
                         label="Theme block"
-                        state="neutral"
-                        text="Not verified"
+                        state={data.widgetSeen ? "active" : "neutral"}
+                        text={data.widgetSeen ? "Showing on your store" : "Not seen yet"}
                         url={themeEditor}
                       />
                       <IntegrationStatusRow

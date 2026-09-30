@@ -47,6 +47,16 @@ export interface OfferConfig {
     cardStyle?: string;
   };
   labels: Record<string, Record<string, string>>;
+  /** Unix seconds. The widget hides itself outside this window so it never
+   *  promises a discount the scheduled Shopify discount isn't giving. */
+  startsAt?: number | null;
+  endsAt?: number | null;
+}
+
+/** The config as written to products: the stored config plus its schedule. */
+function withSchedule(config: OfferConfig, schedule: { startsAt: Date | null; endsAt: Date | null }): OfferConfig {
+  const seconds = (date: Date | null) => (date ? Math.floor(date.getTime() / 1000) : null);
+  return { ...config, startsAt: seconds(schedule.startsAt), endsAt: seconds(schedule.endsAt) };
 }
 
 /* ------------------------------------------------------------------ */
@@ -278,7 +288,7 @@ export async function applyShopDesignToLiveOffers(
 ) {
   const live = await prisma.offer.findMany({
     where: { shopId: shop.id, status: "live" },
-    select: { id: true, config: true, resolvedProductIds: true },
+    select: { id: true, config: true, resolvedProductIds: true, startsAt: true, endsAt: true },
   });
   for (const offer of live) {
     const current = offer.config as unknown as OfferConfig;
@@ -299,16 +309,44 @@ export async function applyShopDesignToLiveOffers(
     };
     await prisma.offer.update({ where: { id: offer.id }, data: { config: config as never } });
     if (offer.resolvedProductIds.length) {
-      await writeOfferToProducts(admin, offer.resolvedProductIds, config);
+      await writeOfferToProducts(admin, offer.resolvedProductIds, withSchedule(config, offer));
     }
   }
 }
 
-export async function clearOfferFromProducts(admin: AdminApiContext, productIds: string[]) {
+const PRODUCT_OFFER_IDS = `#graphql
+  query ProductOfferIds($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Product {
+        id
+        offer: metafield(namespace: "bundlekit", key: "offer") { value }
+      }
+    }
+  }`;
+
+/**
+ * Removes this offer's widget from the given products. A product can be
+ * targeted by more than one offer and holds only one metafield, so a product
+ * now showing a *different* offer is left alone.
+ */
+export async function clearOfferFromProducts(admin: AdminApiContext, productIds: string[], offerId: string) {
   for (const batch of chunk(productIds, 25)) {
+    const response = await admin.graphql(PRODUCT_OFFER_IDS, { variables: { ids: batch } });
+    const body = await response.json();
+    const owned = (body.data?.nodes ?? [])
+      .filter((node: { id?: string; offer?: { value: string } | null } | null) => {
+        if (!node?.id || !node.offer) return false;
+        try {
+          return JSON.parse(node.offer.value)?.id === offerId;
+        } catch {
+          return true; // unreadable — ours to clean up
+        }
+      })
+      .map((node: { id: string }) => node.id);
+    if (!owned.length) continue;
     await admin.graphql(METAFIELD_DELETE, {
       variables: {
-        metafields: batch.map((ownerId) => ({
+        metafields: owned.map((ownerId: string) => ({
           ownerId,
           namespace: METAFIELD_NAMESPACE,
           key: METAFIELD_KEY,
@@ -564,12 +602,13 @@ export async function publishOffer(
   combinesWith = { orderDiscounts: false, productDiscounts: false, shippingDiscounts: true },
   // Callers that already resolved the target (e.g. to run checkConflicts
   // first) pass it here so we don't hit the Admin API a second time.
-  preResolvedProductIds?: string[],
+  preResolvedProductIds: string[] | undefined,
   // Null startsAt means "start immediately" (F9).
   schedule: { startsAt: Date | null; endsAt: Date | null } = { startsAt: null, endsAt: null },
+  shopId: string,
 ) {
-  const offer = await prisma.offer.findUniqueOrThrow({
-    where: { id: offerId },
+  const offer = await prisma.offer.findFirstOrThrow({
+    where: { id: offerId, shopId },
     include: { shop: { select: { functionId: true } } },
   });
   const config = offer.config as unknown as OfferConfig;
@@ -583,7 +622,12 @@ export async function publishOffer(
     getFunctionId(admin, { id: offer.shopId, functionId: offer.shop.functionId }),
   ]);
 
-  await writeOfferToProducts(admin, productIds, config);
+  await writeOfferToProducts(admin, productIds, withSchedule(config, schedule));
+  // Products dropped from the target since the last publish must stop
+  // showing the widget — the Function would still honour their metafield.
+  const current = new Set(productIds);
+  const removed = offer.resolvedProductIds.filter((id) => !current.has(id));
+  if (removed.length) await clearOfferFromProducts(admin, removed, offer.id);
   const discountSchedule = { startsAt, endsAt: schedule.endsAt };
   let discountGid: string;
   try {
@@ -634,19 +678,21 @@ export function computeDisplayStatus(
 /** Stops the discount without losing the offer's configuration — the
  *  merchant can resume later and everything (tiers, target, design) is
  *  exactly as it was. */
-export async function pauseOffer(admin: AdminApiContext, offerId: string) {
-  const offer = await prisma.offer.findUniqueOrThrow({ where: { id: offerId } });
+export async function pauseOffer(admin: AdminApiContext, offerId: string, shopId: string) {
+  const offer = await prisma.offer.findFirstOrThrow({ where: { id: offerId, shopId } });
   if (offer.discountGid) {
     const response = await admin.graphql(DISCOUNT_DEACTIVATE, { variables: { id: offer.discountGid } });
     const body = await response.json();
     const errors = body.data?.discountAutomaticDeactivate?.userErrors ?? [];
     if (errors.length) throw new Error(`discount deactivate: ${JSON.stringify(errors)}`);
   }
+  // Without this the widget keeps promising a discount checkout won't give.
+  if (offer.resolvedProductIds.length) await clearOfferFromProducts(admin, offer.resolvedProductIds, offer.id);
   return prisma.offer.update({ where: { id: offerId }, data: { status: "paused" } });
 }
 
-export async function resumeOffer(admin: AdminApiContext, offerId: string) {
-  const offer = await prisma.offer.findUniqueOrThrow({ where: { id: offerId } });
+export async function resumeOffer(admin: AdminApiContext, offerId: string, shopId: string) {
+  const offer = await prisma.offer.findFirstOrThrow({ where: { id: offerId, shopId } });
   if (!offer.discountGid) {
     throw new Error("This offer was never published, so there's nothing to resume — publish it instead.");
   }
@@ -654,6 +700,9 @@ export async function resumeOffer(admin: AdminApiContext, offerId: string) {
   const body = await response.json();
   const errors = body.data?.discountAutomaticActivate?.userErrors ?? [];
   if (errors.length) throw new Error(`discount activate: ${JSON.stringify(errors)}`);
+  if (offer.resolvedProductIds.length) {
+    await writeOfferToProducts(admin, offer.resolvedProductIds, withSchedule(offer.config as unknown as OfferConfig, offer));
+  }
   return prisma.offer.update({ where: { id: offerId }, data: { status: "live" } });
 }
 
@@ -691,7 +740,7 @@ export async function deleteOffer(admin: AdminApiContext, offerId: string, shopI
   const offer = await prisma.offer.findFirstOrThrow({ where: { id: offerId, shopId } });
 
   if (offer.resolvedProductIds.length) {
-    await clearOfferFromProducts(admin, offer.resolvedProductIds);
+    await clearOfferFromProducts(admin, offer.resolvedProductIds, offer.id);
   }
   if (offer.discountGid) {
     const response = await admin.graphql(DISCOUNT_DELETE, { variables: { id: offer.discountGid } });

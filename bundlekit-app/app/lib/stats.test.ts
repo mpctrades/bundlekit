@@ -100,7 +100,8 @@ describe("computeTrend", () => {
     expect(computeTrend(0, 0)).toBeNull();
   });
 
-  it("treats going from zero to something as a new-activity case, not +Infinity%", () => {
-    expect(computeTrend(40, 0)).toEqual({ direction: "up", percent: 100 });
+  it("shows no trend when the prior period was zero, not +Infinity% or a made-up +100%", () => {
+    // No prior period to compare against: show no trend rather than a made-up +100%.
+    expect(computeTrend(40, 0)).toBeNull();
   });
 });

@@ -322,7 +322,8 @@
         hidden.value = String(quantity);
       }
 
-      tagLine(form, offerId);
+      // Only a chosen tier is a bundle — a plain single unit isn't bundle revenue.
+      tagLine(form, selectedIndex === -1 ? "" : offerId);
 
       if (settings.updateButtonLabel === false) return;
       var button = form.querySelector(SUBMIT);
@@ -355,6 +356,8 @@
         form.appendChild(field);
       }
       field.value = id;
+      // An empty line property would still show on the order; drop it instead.
+      field.disabled = !id;
     }
 
     function beacon(event) {

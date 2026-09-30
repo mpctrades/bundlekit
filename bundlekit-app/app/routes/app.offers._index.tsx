@@ -123,8 +123,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const shop = await getOrCreateShop(session.shop);
     if (intent === "duplicate") await duplicateOffer(offerId, shop.id);
-    else if (intent === "pause") await pauseOffer(admin, offerId);
-    else if (intent === "resume") await resumeOffer(admin, offerId);
+    else if (intent === "pause") await pauseOffer(admin, offerId, shop.id);
+    else if (intent === "resume") await resumeOffer(admin, offerId, shop.id);
     else if (intent === "delete") {
       // Belt-and-suspenders: the menu already hides "Delete" behind a
       // pause-first prompt for a live offer, but that's client-side — a

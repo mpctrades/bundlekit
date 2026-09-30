@@ -127,7 +127,8 @@ export interface Trend {
  *  a "0 -> N" jump isn't a meaningful percentage, so the card shows "New"
  *  instead of a misleading +∞%. */
 export function computeTrend(current: number, previous: number): Trend | null {
-  if (previous === 0) return current === 0 ? null : { direction: "up", percent: 100 };
+  // Nothing to compare against — a "+100%" here would be made up.
+  if (previous === 0) return null;
   const percent = ((current - previous) / previous) * 100;
   if (Math.abs(percent) < 0.5) return { direction: "flat", percent: 0 };
   return { direction: percent > 0 ? "up" : "down", percent: Math.abs(percent) };
