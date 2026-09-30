@@ -4,6 +4,7 @@ import { SearchIcon } from "@shopify/polaris-icons";
 import { useLoaderData, useNavigate } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { liveOfferLimitError } from "../lib/billing.server";
 import prisma from "../db.server";
 import {
   computeDisplayStatus,
@@ -124,7 +125,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shop = await getOrCreateShop(session.shop);
     if (intent === "duplicate") await duplicateOffer(offerId, shop.id);
     else if (intent === "pause") await pauseOffer(admin, offerId, shop.id);
-    else if (intent === "resume") await resumeOffer(admin, offerId, shop.id);
+    else if (intent === "resume") {
+      // Resuming makes an offer live again, so it counts against the plan.
+      const limitError = await liveOfferLimitError(admin, shop.id, offerId);
+      if (limitError) return { error: limitError };
+      await resumeOffer(admin, offerId, shop.id);
+    }
     else if (intent === "delete") {
       // Belt-and-suspenders: the menu already hides "Delete" behind a
       // pause-first prompt for a live offer, but that's client-side — a

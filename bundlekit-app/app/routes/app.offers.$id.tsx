@@ -40,8 +40,7 @@ import {
   type OfferConfig,
 } from "../lib/offers.server";
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
-import { getActivePlan, lookupActivePlan } from "../lib/billing.server";
-import { getOfferLimit } from "../lib/billing";
+import { liveOfferLimitError } from "../lib/billing.server";
 import { BORDER, BRAND_ACCENT, useThemeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
@@ -70,21 +69,9 @@ async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
   const previewDesign = { savingsDisplay: shop.defaultSavingsDisplay as SavingsDisplay, cardStyle: shop.defaultCardStyle as CardStyle };
 
   if (params.id === "new") {
-    const [plan, offerCount] = await Promise.all([
-      getActivePlan(admin),
-      // Fails open, same as getActivePlan above: this is only the UI check
-      // that decides whether to show the builder or the "limit reached"
-      // empty state (the action re-checks for real before publishing), so a
-      // transient count failure must never be the thing that blocks a
-      // merchant from even opening the offer builder.
-      prisma.offer.count({ where: { shopId: shop.id } }).catch((error) => {
-        console.warn("[bundlekit] offer count check failed", error);
-        return 0;
-      }),
-    ]);
-    if (offerCount >= getOfferLimit(plan)) {
-      return { limitReached: true as const, plan };
-    }
+    // Plans limit *live* offers (as Shopify's plan page states), so drafts
+    // are unlimited and the builder always opens — the limit is enforced
+    // when publishing.
     return {
       offer: {
         id: "new",
@@ -176,20 +163,6 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const shop = await getOrCreateShop(session.shop);
-
-  // Belt-and-suspenders: the "new" loader already hides the builder once a
-  // shop is at its plan's offer limit, but that's a UI nicety, not a lock —
-  // a direct POST (or a stale tab) must not be able to create past it.
-  if (params.id === "new") {
-    const [plan, offerCount] = await Promise.all([
-      lookupActivePlan(admin),
-      prisma.offer.count({ where: { shopId: shop.id } }),
-    ]);
-    // A failed plan lookup must not lock a paying merchant out of creating.
-    if (plan && offerCount >= getOfferLimit(plan)) {
-      return { error: "You've reached your plan's offer limit. Upgrade to add more offers." };
-    }
-  }
 
   const name = String(form.get("name") || "Untitled offer");
   const targetType = String(form.get("targetType") || "products");
@@ -309,6 +282,9 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   if (form.get("intent") === "publish") {
     try {
       const candidateProductIds = await resolveTargetProducts(admin, targetType, targetIds);
+      const limitError = await liveOfferLimitError(admin, shop.id, offer.id);
+      if (limitError) return { error: limitError, offerId: offer.id };
+
       const conflicts = await checkConflicts(admin, shop.id, { id: offer.id, targetType }, candidateProductIds);
       const ambiguous = conflicts.filter((conflict) => conflict.winner === "ambiguous");
 
@@ -423,10 +399,9 @@ export default function OfferBuilder() {
   }, [actionData]);
 
   // All hooks below must run on every render regardless of which loader
-  // shape came back — a limit-reached response has no `offer` to seed state
+  // shape came back — a load-error response has no `offer` to seed state
   // from, so it falls back to an empty draft that's never actually shown
-  // (the branch below returns before this state is used).
-  const limitReached = "limitReached" in data && data.limitReached;
+  // (the branches below return before this state is used).
   const offer = "offer" in data ? data.offer : undefined;
 
   const [name, setName] = useState(offer?.name ?? "");
@@ -518,21 +493,14 @@ export default function OfferBuilder() {
     );
   }
 
-  if (limitReached || !offer) {
+  if (!offer) {
     return (
-      <Page title="New offer" backAction={{ onAction: () => navigate("/app/offers") }}>
+      <Page title="Offer" backAction={{ onAction: () => navigate("/app/offers") }}>
         <Layout>
           <Layout.Section>
-            <Panel>
-              <EmptyState
-                heading="You've reached your plan's offer limit"
-                action={{ content: "View plans", onAction: () => navigate("/app/billing") }}
-                secondaryAction={{ content: "Back to offers", onAction: () => navigate("/app/offers") }}
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <p>Upgrade your plan to create more offers.</p>
-              </EmptyState>
-            </Panel>
+            <Banner tone="warning" title="This offer isn't available">
+              <p>It may have been deleted. Go back to your offers to pick another one.</p>
+            </Banner>
           </Layout.Section>
         </Layout>
       </Page>

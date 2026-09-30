@@ -25,7 +25,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const shop = await getOrCreateShop(session.shop);
     const [plan, offerCount] = await Promise.all([
       getActivePlan(admin),
-      prisma.offer.count({ where: { shopId: shop.id } }),
+      // Plans cap live offers; drafts and paused offers don't count.
+      prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
     ]);
 
     return { plan, offerCount, pricingPlansUrl, error: null as string | null };
@@ -65,8 +66,8 @@ export default function Billing() {
                 </InlineStack>
                 <Text as="p" tone="subdued" variant="bodySm">
                   {Number.isFinite(limit)
-                    ? `${offerCount} of ${limit} offers used`
-                    : `${offerCount} offers — unlimited on this plan`}
+                    ? `${offerCount} of ${limit} live offers used`
+                    : `${offerCount} live offers — unlimited on this plan`}
                 </Text>
                 {Number.isFinite(limit) ? <ProgressBar progress={usagePct} tone={usagePct >= 100 ? "critical" : "primary"} /> : null}
                 <Button url={pricingPlansUrl} target="_top" variant="primary">

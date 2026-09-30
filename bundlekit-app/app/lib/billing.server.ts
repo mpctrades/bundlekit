@@ -1,5 +1,6 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import { PLANS, type PlanKey } from "./billing";
+import prisma from "../db.server";
+import { getOfferLimit, PLANS, type PlanKey } from "./billing";
 
 const NAME_TO_PLAN: Record<string, PlanKey> = Object.fromEntries(
   Object.values(PLANS).map((plan) => [plan.name, plan.key as PlanKey]),
@@ -55,4 +56,24 @@ export function getPricingPlansUrl(shopDomain: string): string {
   const storeHandle = shopDomain.replace(/\.myshopify\.com$/, "");
   const appHandle = process.env.SHOPIFY_APP_HANDLE || "bundlekit-24";
   return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+}
+
+/**
+ * Plans cap *live* offers (drafts are unlimited). Returns the message to show
+ * when making `offerId` live would exceed the shop's plan, or null. A failed
+ * plan lookup never blocks — a paying merchant must not be locked out by it.
+ */
+export async function liveOfferLimitError(
+  admin: AdminApiContext,
+  shopId: string,
+  offerId: string,
+): Promise<string | null> {
+  const [plan, otherLive] = await Promise.all([
+    lookupActivePlan(admin),
+    prisma.offer.count({ where: { shopId, status: "live", id: { not: offerId } } }),
+  ]);
+  if (!plan) return null;
+  const limit = getOfferLimit(plan);
+  if (otherLive < limit) return null;
+  return `Your ${PLANS[plan].name} plan allows ${limit} live offers. Pause one, or upgrade your plan to publish more.`;
 }

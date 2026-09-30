@@ -4,8 +4,8 @@
  * exactly as typed there; that's the only thing tying an AppSubscription
  * back to one of these tiers.
  *
- * "free" has no Partner Dashboard plan — it's simply what a shop is on
- * before it has any active subscription.
+ * "free" is also a $0 Managed Pricing plan, and the default for a shop with
+ * no active subscription. `offerLimit` caps *live* offers; drafts are free.
  *
  * Plain (non-`.server`) module: this metadata is rendered directly in the
  * billing page's component, so it must be safe to bundle for the client —
@@ -26,9 +26,9 @@ export function getOfferLimit(plan: PlanKey): number {
 // Shared with the public landing page's pricing section so the two never
 // drift apart — this is the one place plan copy is written.
 export const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  free: ["Up to 3 offers", "All discount types and targeting", "Analytics dashboard", "EN + FR storefront"],
-  grow: ["Up to 10 offers", "Everything in Free", "14-day free trial"],
-  pro: ["Unlimited offers", "Everything in Grow", "Priority support", "14-day free trial"],
+  free: ["3 live offers", "All discount types and targeting", "Analytics dashboard", "EN + FR storefront"],
+  grow: ["10 live offers", "Everything in Free", "14-day free trial"],
+  pro: ["Unlimited live offers", "Everything in Grow", "Priority support", "14-day free trial"],
 };
 
 export const PLAN_PRICE: Record<PlanKey, string> = {

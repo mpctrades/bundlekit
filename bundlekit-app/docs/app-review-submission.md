@@ -76,7 +76,7 @@ These have to happen in dashboards and stores, so they're outside this repo:
 > **6. Billing.** Plans & billing → *Choose a plan* opens Shopify's
 > plan-selection page (Managed Pricing). Grow and Pro have a 14-day trial.
 > You can upgrade, downgrade, or return to Free there, without contacting us.
-> The Free plan allows 3 offers. A 4th shows an upgrade prompt.
+> The Free plan allows 3 live offers (drafts are unlimited). Publishing a 4th shows an upgrade prompt.
 >
 > **7. Uninstall.** Uninstalling removes the widget and deactivates the
 > automatic discount (Shopify does both). Our webhook deletes the shop's
