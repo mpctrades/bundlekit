@@ -17,7 +17,7 @@ import {
   summarizeByOffer,
   totalStats,
 } from "../lib/stats.server";
-import { getFunctionId, reconcileLiveOffers } from "../lib/offers.server";
+import { getFunctionId, reconcileLiveOffers, removeOrphanedOfferMetafields } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { Chart } from "../components/Chart";
@@ -59,12 +59,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // instead of four chained ones. That used to be the dashboard's biggest
     // latency cost: two live Admin API calls awaited back-to-back before the
     // page could even start rendering.
-    const [syncedCurrency, offerCount, liveCount, rows, previousRows, functionDeployed] = await Promise.all([
+    const [syncedCurrency, , offerCount, liveCount, rows, previousRows, functionDeployed] = await Promise.all([
       // Best-effort: the store's real currency, not the schema default. Never
       // let a sync hiccup block the dashboard from loading.
       syncShopInfo(admin, shop.id).catch((error) => {
         console.warn("[bundlekit] shop info sync failed", error);
         return undefined;
+      }),
+      // First Dashboard visit after a reinstall: drop widgets left behind by
+      // offers from the previous install. Best-effort, like the sync above.
+      removeOrphanedOfferMetafields(admin, shop.id).catch((error) => {
+        console.warn("[bundlekit] orphaned metafield cleanup failed", error);
+        return 0;
       }),
       prisma.offer.count({ where: { shopId: shop.id } }),
       prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),

@@ -314,6 +314,63 @@ export async function applyShopDesignToLiveOffers(
   }
 }
 
+const OFFER_METAFIELDS = `#graphql
+  query OfferMetafields($cursor: String) {
+    metafieldDefinition(identifier: { ownerType: PRODUCT, namespace: "bundlekit", key: "offer" }) {
+      metafields(first: 250, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { value owner { ... on Product { id } } }
+      }
+    }
+  }`;
+
+interface OfferMetafieldPage {
+  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  nodes: Array<{ value: string; owner: { id?: string } }>;
+}
+
+/**
+ * The product metafield is merchant-owned, so it survives an uninstall while
+ * our offers don't: on reinstall the widget would show tiers for offers that
+ * no longer exist and have no discount behind them. Removes every product
+ * metafield that doesn't belong to one of this shop's live offers. Returns
+ * how many were removed.
+ */
+export async function removeOrphanedOfferMetafields(admin: AdminApiContext, shopId: string): Promise<number> {
+  const live = await prisma.offer.findMany({ where: { shopId, status: "live" }, select: { id: true } });
+  const liveIds = new Set(live.map((offer) => offer.id));
+
+  const orphaned: string[] = [];
+  let cursor: string | null = null;
+  do {
+    const response = await admin.graphql(OFFER_METAFIELDS, { variables: { cursor } });
+    const body: { data?: { metafieldDefinition?: { metafields: OfferMetafieldPage } | null } } = await response.json();
+    const page = body.data?.metafieldDefinition?.metafields;
+    if (!page) break; // no definition yet: nothing was ever written
+    for (const node of page.nodes) {
+      if (!node.owner?.id) continue;
+      let offerId: string | undefined;
+      try {
+        offerId = JSON.parse(node.value)?.id;
+      } catch {
+        offerId = undefined;
+      }
+      if (!offerId || !liveIds.has(offerId)) orphaned.push(node.owner.id);
+    }
+    cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (cursor);
+
+  for (const batch of chunk(orphaned, 25)) {
+    await admin.graphql(METAFIELD_DELETE, {
+      variables: {
+        metafields: batch.map((ownerId) => ({ ownerId, namespace: METAFIELD_NAMESPACE, key: METAFIELD_KEY })),
+      },
+    });
+  }
+  if (orphaned.length) console.warn(`[bundlekit] removed ${orphaned.length} orphaned offer metafield(s)`);
+  return orphaned.length;
+}
+
 const PRODUCT_OFFER_IDS = `#graphql
   query ProductOfferIds($ids: [ID!]!) {
     nodes(ids: $ids) {
