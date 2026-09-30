@@ -33,12 +33,14 @@ const authenticateAdmin: typeof shopify.authenticate.admin = async (request) => 
   try {
     return await shopify.authenticate.admin(request);
   } catch (error) {
-    if (error instanceof Response) throw error;
+    // The library also answers a failed token exchange (e.g. a token for a
+    // shop that doesn't exist) with its own bare 500 Response.
+    if (error instanceof Response && error.status < 500) throw error;
     const shop = new URL(request.url).searchParams.get("shop");
     console.warn(
       "[bundlekit] rejected admin request",
       { shop },
-      error instanceof Error ? error.message : error,
+      error instanceof Response ? `library ${error.status}` : error instanceof Error ? error.message : error,
     );
     throw new Response("Unauthorized", { status: 401 });
   }
