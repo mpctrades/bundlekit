@@ -32,7 +32,15 @@ export function OfferPreview({
 }: OfferPreviewProps) {
   return (
     <BlockStack gap="200">
-      <PreviewRow label="1 unit" note="Regular price" total={unitPriceCents} selected={false} cardStyle={cardStyle} />
+      {/* Mirrors the widget: one unit is preselected unless a tier is highlighted. */}
+      <PreviewRow
+        label="1 unit"
+        note="Regular price"
+        total={unitPriceCents}
+        accent={accent}
+        selected={!tiers.some((tier) => tier.badge)}
+        cardStyle={cardStyle}
+      />
       {normaliseTiers(tiers).map((tier) => {
         const priced = priceTier(unitPriceCents, tier);
         return (

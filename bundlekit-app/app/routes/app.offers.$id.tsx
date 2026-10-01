@@ -119,7 +119,8 @@ async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
   if (offer.targetType !== "all") {
     try {
       targetResources = await fetchResourceSummaries(admin, offer.targetIds);
-    } catch {
+    } catch (error) {
+      console.error("[bundlekit] product/collection name lookup failed", error);
       resourceLoadError = true;
       targetResources = offer.targetIds.map((id) => ({ id, title: "Unable to load name", image: null }));
     }
