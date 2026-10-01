@@ -36,8 +36,8 @@
     data-money-format="{{ shop.money_format | strip_html | escape }}"
     data-proxy="/apps/bundlekit"
     style="
-      --bk-accent: {{ offer.design.accent | default: '#FF4A1C' }};
-      --bk-radius: {{ offer.design.radius | default: 10 }}px;
+      --bk-accent: {{ offer.design.accent | default: '#FF4A1C' | escape }};
+      --bk-radius: {{ offer.design.radius | default: 10 | plus: 0 }}px;
     "
     {{ block.shopify_attributes }}
   >

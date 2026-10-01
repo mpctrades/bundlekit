@@ -9,6 +9,13 @@ export const INK_SOFT = "#6E6555";
 export const BORDER = "#E7E0D0";
 export const PAGE_BACKGROUND = "#F2EFEA";
 
+/** The widget prints the accent into a storefront `style` attribute, so only
+ *  a plain hex colour is ever stored; anything else keeps `fallback`. */
+export function normaliseAccent(value: unknown, fallback: string): string {
+  const trimmed = String(value ?? "").trim();
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed) ? trimmed : fallback;
+}
+
 // Must match the block's filename (extensions/bundlekit-widget/blocks/bundlekit.liquid).
 const THEME_APP_BLOCK_HANDLE = "bundlekit";
 

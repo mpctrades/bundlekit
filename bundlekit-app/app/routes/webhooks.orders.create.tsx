@@ -28,32 +28,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   if (!byOffer.size) return new Response();
 
-  // At-least-once delivery: claim this delivery id first. A retry hits the
-  // primary key, and we acknowledge it without counting the order again.
-  if (webhookId) {
-    try {
-      await prisma.processedWebhook.create({ data: { id: webhookId } });
-    } catch (error) {
-      if ((error as { code?: string }).code === "P2002") return new Response();
-      throw error;
-    }
-  }
-
   const day = new Date();
   day.setUTCHours(0, 0, 0, 0);
 
-  for (const [offerId, revenue] of byOffer) {
-    const offer = await prisma.offer.findFirst({
-      where: { id: offerId, shop: { domain: shop } },
-      select: { id: true },
-    });
-    if (!offer) continue;
+  // At-least-once delivery: claim this delivery id, and count the order in
+  // the same transaction. A retry hits the primary key and is acknowledged
+  // without counting twice; a failure part-way rolls the claim back, so the
+  // retry still counts it.
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (webhookId) await tx.processedWebhook.create({ data: { id: webhookId } });
 
-    await prisma.offerStat.upsert({
-      where: { offerId_day: { offerId: offer.id, day } },
-      create: { offerId: offer.id, day, orders: 1, revenue },
-      update: { orders: { increment: 1 }, revenue: { increment: revenue } },
+      for (const [offerId, revenue] of byOffer) {
+        const offer = await tx.offer.findFirst({
+          where: { id: offerId, shop: { domain: shop } },
+          select: { id: true },
+        });
+        if (!offer) continue;
+
+        await tx.offerStat.upsert({
+          where: { offerId_day: { offerId: offer.id, day } },
+          create: { offerId: offer.id, day, orders: 1, revenue },
+          update: { orders: { increment: 1 }, revenue: { increment: revenue } },
+        });
+      }
     });
+  } catch (error) {
+    // Only the delivery-id claim means "already counted". Any other unique
+    // clash (two orders creating the same day's stat row at once) must fail
+    // so Shopify retries it.
+    if ((error as { code?: string }).code === "P2002" && webhookId) {
+      const claimed = await prisma.processedWebhook.findUnique({ where: { id: webhookId }, select: { id: true } });
+      if (claimed) return new Response();
+    }
+    throw error;
   }
   return new Response();
 };

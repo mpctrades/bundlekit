@@ -757,10 +757,17 @@ export async function resumeOffer(admin: AdminApiContext, offerId: string, shopI
   const body = await response.json();
   const errors = body.data?.discountAutomaticActivate?.userErrors ?? [];
   if (errors.length) throw new Error(`discount activate: ${JSON.stringify(errors)}`);
-  if (offer.resolvedProductIds.length) {
-    await writeOfferToProducts(admin, offer.resolvedProductIds, withSchedule(offer.config as unknown as OfferConfig, offer));
-  }
-  return prisma.offer.update({ where: { id: offerId }, data: { status: "live" } });
+  // A full publish, not just a metafield rewrite: the offer may have been
+  // edited while paused, and the discount's own config (what checkout
+  // charges) must match the tiers the widget is about to show again.
+  return publishOffer(
+    admin,
+    offerId,
+    { productDiscounts: offer.combineProduct, orderDiscounts: offer.combineOrder, shippingDiscounts: true },
+    undefined,
+    { startsAt: offer.startsAt, endsAt: offer.endsAt },
+    shopId,
+  );
 }
 
 /** A copy always starts as an unpublished draft — duplicating a live offer
