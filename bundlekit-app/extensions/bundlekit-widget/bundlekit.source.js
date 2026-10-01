@@ -390,9 +390,12 @@
     beacon("view");
   }
 
+  /** The merchant's highlighted tier, or -1 (a single unit). Without a
+   *  highlight the shopper starts on one unit and opts into a bundle —
+   *  never on a bigger quantity they didn't choose. */
   function indexOfBadged(tiers) {
     for (var i = 0; i < tiers.length; i++) if (tiers[i].badge) return i;
-    return tiers.length ? 0 : -1;
+    return -1;
   }
 
   function hide(root) {
