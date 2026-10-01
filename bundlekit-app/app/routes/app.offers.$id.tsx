@@ -41,13 +41,15 @@ import {
 } from "../lib/offers.server";
 import { DEFAULT_TIERS, normaliseTiers, type DiscountType, type Tier } from "../lib/pricing";
 import { liveOfferLimitError } from "../lib/billing.server";
-import { BORDER, BRAND_ACCENT, useThemeEditorDeepLink } from "../lib/theme";
+import { BORDER, BRAND_ACCENT, normaliseAccent, useThemeEditorDeepLink } from "../lib/theme";
 import { friendlyErrorMessage } from "../lib/errors";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
 import { ResourcePickerField, type PickedResource } from "../components/ResourcePickerField";
 import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/ToastProvider";
+
+const NAME_MAX_LENGTH = 100;
 
 export const loader = async (args: LoaderFunctionArgs) => {
   try {
@@ -164,7 +166,8 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   const form = await request.formData();
   const shop = await getOrCreateShop(session.shop);
 
-  const name = String(form.get("name") || "Untitled offer");
+  // Also the Shopify discount title, which has a length limit.
+  const name = String(form.get("name") || "").trim().slice(0, NAME_MAX_LENGTH) || "Untitled offer";
   const targetType = String(form.get("targetType") || "products");
   const expectedResource = targetType === "collection" ? "Collection" : "Product";
   // The resource picker only ever returns real gids, but validate anyway —
@@ -173,7 +176,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
     .map((value) => value.trim())
     .filter(Boolean);
   const tiers = normaliseTiers(JSON.parse(String(form.get("tiers") || "[]")) as Tier[]);
-  const accent = String(form.get("accent") || shop.defaultAccent);
+  const accent = normaliseAccent(form.get("accent"), shop.defaultAccent);
   const combineProduct = form.get("combineProduct") === "on";
   const combineOrder = form.get("combineOrder") === "on";
 
@@ -254,11 +257,20 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   };
 
   let offer;
+  let intent = form.get("intent");
   try {
     // An offer id from the URL is only trusted if it belongs to this shop.
-    if (offerId && !(await prisma.offer.findFirst({ where: { id: offerId, shopId: shop.id }, select: { id: true } }))) {
+    const existing = offerId
+      ? await prisma.offer.findFirst({ where: { id: offerId, shopId: shop.id }, select: { status: true } })
+      : null;
+    if (offerId && !existing) {
       return { error: "This offer doesn't exist." };
     }
+    // A live offer has no draft copy: the stored config is what Design
+    // changes and Resume push to the storefront, so saving it without
+    // publishing would leave the widget and the checkout discount on
+    // different tiers. Saving a live offer always republishes it.
+    if (existing?.status === "live") intent = "publish";
     offer = offerId
       ? await prisma.offer.update({
           where: { id: offerId },
@@ -279,7 +291,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
     return { error: friendlyErrorMessage(error) };
   }
 
-  if (form.get("intent") === "publish") {
+  if (intent === "publish") {
     try {
       const candidateProductIds = await resolveTargetProducts(admin, targetType, targetIds);
       const limitError = await liveOfferLimitError(admin, shop.id, offer.id);
@@ -344,6 +356,44 @@ function fromDatetimeLocalValue(value: string): string {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
+/** Keeps what the merchant is typing ("4.", "") until it parses. Turning
+ *  every keystroke into a number and back ate the decimal point, so an
+ *  amount like 4.99 couldn't be typed. */
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => {
+    // Only an outside change (tier type switched, tier removed) resets it.
+    if (Number(draft) !== value) setDraft(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <TextField
+      label={label}
+      labelHidden
+      type="number"
+      min={min}
+      value={draft}
+      onChange={(next) => {
+        setDraft(next);
+        const parsed = Number(next);
+        if (next.trim() !== "" && Number.isFinite(parsed)) onChange(parsed);
+      }}
+      onBlur={() => setDraft(String(value))}
+      autoComplete="off"
+    />
+  );
+}
+
 /** The merchant-facing version of "couldn't load product names" — leads
  *  with reassurance and one action, and puts the technical explanation
  *  behind a disclosure instead of the headline. */
@@ -393,6 +443,11 @@ export default function OfferBuilder() {
       showToast(actionData.error, true);
     } else if ("ok" in actionData) {
       showToast(lastIntent.current === "publish" ? "Offer published" : "Offer saved");
+    }
+    // The first save of a new offer creates it. Stay on /offers/new and the
+    // next Save or Publish would create a second copy, so move to its URL.
+    if ("offer" in data && data.offer.id === "new" && "offerId" in actionData && actionData.offerId) {
+      navigate(`/app/offers/${actionData.offerId}`, { replace: true });
     }
     // actionData is a fresh object each submission, so this only fires once per response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -508,6 +563,10 @@ export default function OfferBuilder() {
   }
 
   const { shopDomain, badgeText, previewDesign } = data;
+  // Edits to a live offer go straight to the storefront (see the action).
+  const isLive = offer.status === "live";
+  const saveIntent = isLive ? "publish" : "save";
+  const saveLabel = isLive ? "Save" : "Save draft";
   const previewUnitPrice = 1990; // €19.90, the preview product
 
   const update = (index: number, patch: Partial<Tier>) =>
@@ -570,7 +629,7 @@ export default function OfferBuilder() {
       {isDirty ? (
         <ContextualSaveBar
           message="Unsaved changes"
-          saveAction={{ content: "Save draft", loading: busy, disabled: hasBlockingErrors, onAction: () => save("save") }}
+          saveAction={{ content: saveLabel, loading: busy, disabled: hasBlockingErrors, onAction: () => save(saveIntent) }}
           discardAction={{ content: "Discard", onAction: discard }}
         />
       ) : null}
@@ -584,11 +643,13 @@ export default function OfferBuilder() {
                 error boundary that caught it). A normal Polaris Button
                 stays inside our own React tree and just works. */}
             <InlineStack align="end" gap="200">
-              <Button disabled={hasBlockingErrors} onClick={() => save("save")}>
-                Save draft
-              </Button>
+              {isLive ? null : (
+                <Button disabled={hasBlockingErrors || busy} onClick={() => save("save")}>
+                  Save draft
+                </Button>
+              )}
               <Button variant="primary" loading={busy} disabled={hasBlockingErrors} onClick={() => save("publish")}>
-                Publish
+                {isLive ? "Save" : "Publish"}
               </Button>
             </InlineStack>
             {offer.resourceLoadError ? <ProductAccessBanner shopDomain={shopDomain} /> : null}
@@ -619,6 +680,7 @@ export default function OfferBuilder() {
                   helpText="Shoppers see this in the cart next to the discount."
                   value={name}
                   onChange={setName}
+                  maxLength={NAME_MAX_LENGTH}
                   autoComplete="off"
                 />
               </BlockStack>
@@ -690,14 +752,11 @@ export default function OfferBuilder() {
                         <InlineStack gap="150" blockAlign="center" wrap={false}>
                           <Text as="span" variant="bodyMd">Buy</Text>
                           <Box width="70px">
-                            <TextField
+                            <NumberField
                               label="Quantity"
-                              labelHidden
-                              type="number"
                               min={2}
-                              value={String(tier.quantity)}
-                              onChange={(value) => update(index, { quantity: Number(value) })}
-                              autoComplete="off"
+                              value={tier.quantity}
+                              onChange={(value) => update(index, { quantity: value })}
                             />
                           </Box>
                           <Text as="span" variant="bodyMd">or more</Text>
@@ -708,17 +767,15 @@ export default function OfferBuilder() {
                             {tier.type === "fixed_price" ? "Set total price at" : "Give"}
                           </Text>
                           <Box width="90px">
-                            <TextField
+                            <NumberField
                               label="Value"
-                              labelHidden
-                              type="number"
-                              value={String(tier.type === "percentage" ? tier.value : tier.value / 100)}
+                              min={0}
+                              value={tier.type === "percentage" ? tier.value : tier.value / 100}
                               onChange={(value) =>
                                 update(index, {
-                                  value: tier.type === "percentage" ? Number(value) : Math.round(Number(value) * 100),
+                                  value: tier.type === "percentage" ? value : Math.round(value * 100),
                                 })
                               }
-                              autoComplete="off"
                             />
                           </Box>
                           <Box width="140px">

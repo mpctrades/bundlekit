@@ -12,8 +12,13 @@ import { DEFAULT_TIERS, normaliseTiers, priceTier } from "../lib/pricing";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
+import { normaliseAccent } from "../lib/theme";
 
 const PREVIEW_UNIT_PRICE = 1990; // €19.90, same demo product as the offer builder
+
+function oneOf(value: FormDataEntryValue | null, allowed: string[], fallback: string): string {
+  return typeof value === "string" && allowed.includes(value) ? value : fallback;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -39,13 +44,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const updated = await prisma.shop.update({
       where: { id: shop.id },
       data: {
-        defaultAccent: String(form.get("defaultAccent") || shop.defaultAccent),
+        defaultAccent: normaliseAccent(form.get("defaultAccent"), shop.defaultAccent),
         defaultRadius: Number.isFinite(radius) ? Math.min(24, Math.max(0, radius)) : shop.defaultRadius,
         defaultShowTrustLine: form.get("defaultShowTrustLine") === "on",
         defaultBadgeText: String(form.get("defaultBadgeText") || shop.defaultBadgeText),
         defaultWidgetTitle: String(form.get("defaultWidgetTitle") || shop.defaultWidgetTitle),
-        defaultSavingsDisplay: String(form.get("defaultSavingsDisplay") || shop.defaultSavingsDisplay),
-        defaultCardStyle: String(form.get("defaultCardStyle") || shop.defaultCardStyle),
+        defaultSavingsDisplay: oneOf(form.get("defaultSavingsDisplay"), ["amount", "percentage", "both"], shop.defaultSavingsDisplay),
+        defaultCardStyle: oneOf(form.get("defaultCardStyle"), ["outline", "soft"], shop.defaultCardStyle),
       },
     });
     await applyShopDesignToLiveOffers(admin, updated);

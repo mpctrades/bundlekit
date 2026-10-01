@@ -68,10 +68,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }),
       // First Dashboard visit after a reinstall: drop widgets left behind by
       // offers from the previous install. Best-effort, like the sync above.
-      removeOrphanedOfferMetafields(admin, shop.id).catch((error) => {
-        console.warn("[bundlekit] orphaned metafield cleanup failed", error);
-        return 0;
-      }),
+      // Once per install — it pages through every offer metafield in the
+      // store, which made every Dashboard load slow on large catalogs.
+      shop.orphansCleanedAt
+        ? 0
+        : removeOrphanedOfferMetafields(admin, shop.id)
+            .then(async (removed) => {
+              await prisma.shop.update({ where: { id: shop.id }, data: { orphansCleanedAt: new Date() } });
+              return removed;
+            })
+            .catch((error) => {
+              console.warn("[bundlekit] orphaned metafield cleanup failed", error);
+              return 0;
+            }),
       prisma.offer.count({ where: { shopId: shop.id } }),
       prisma.offer.count({ where: { shopId: shop.id, status: "live" } }),
       fetchStatsForRange(shop.id, 30),

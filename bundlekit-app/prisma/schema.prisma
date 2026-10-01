@@ -41,6 +41,9 @@ model Shop {
   primaryLocale String   @default("en")
   functionId    String?  // cached Shopify Function id for the discount
   installedAt   DateTime @default(now())
+  // Set once removeOrphanedOfferMetafields() has run for this install. The
+  // row is deleted on uninstall, so a reinstall cleans up again.
+  orphansCleanedAt DateTime?
   offers        Offer[]
 
   // Design defaults (Design page): new offers inherit these unless the
