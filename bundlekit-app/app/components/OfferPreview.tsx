@@ -26,19 +26,19 @@ export function OfferPreview({
   unitPriceCents,
   tiers,
   accent,
-  badgeText = "Most popular",
+  badgeText = "Recommended",
   savingsDisplay = "both",
   cardStyle = "outline",
 }: OfferPreviewProps) {
   return (
     <BlockStack gap="200">
-      {/* Mirrors the widget: one unit is preselected unless a tier is highlighted. */}
+      {/* Mirrors the widget: one unit is always preselected; the badge only highlights. */}
       <PreviewRow
         label="1 unit"
         note="Regular price"
         total={unitPriceCents}
         accent={accent}
-        selected={!tiers.some((tier) => tier.badge)}
+        selected
         cardStyle={cardStyle}
       />
       {normaliseTiers(tiers).map((tier) => {
@@ -51,7 +51,7 @@ export function OfferPreview({
             total={priced.total}
             savingsText={savingsLabel(priced.savings, priced.percentOff, savingsDisplay)}
             accent={accent}
-            selected={Boolean(tier.badge)}
+            selected={false}
             badgeText={tier.badge ? badgeText : undefined}
             cardStyle={cardStyle}
           />

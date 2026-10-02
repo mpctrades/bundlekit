@@ -8,7 +8,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { applyShopDesignToLiveOffers } from "../lib/offers.server";
-import { DEFAULT_TIERS, normaliseTiers, priceTier } from "../lib/pricing";
+import { DEFAULT_TIERS } from "../lib/pricing";
 import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components/OfferPreview";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
@@ -89,8 +89,6 @@ export default function Design() {
     submit(form, { method: "post" });
   };
 
-  const badgedTier = normaliseTiers(DEFAULT_TIERS).find((tier) => tier.badge) ?? normaliseTiers(DEFAULT_TIERS)[0];
-  const ctaPriced = priceTier(PREVIEW_UNIT_PRICE, badgedTier);
 
   return (
     <Page>
@@ -189,7 +187,7 @@ export default function Design() {
                       />
 
                       <TextField
-                        label="Most popular badge"
+                        label="Highlight badge text"
                         value={defaultBadgeText}
                         onChange={setDefaultBadgeText}
                         autoComplete="off"
@@ -353,7 +351,7 @@ export default function Design() {
                           cursor: "default",
                         }}
                       >
-                        Add {badgedTier.quantity} to cart — {(ctaPriced.total / 100).toFixed(2)}
+                        Add 1 to cart — {(PREVIEW_UNIT_PRICE / 100).toFixed(2)}
                       </button>
                     </div>
                   </div>

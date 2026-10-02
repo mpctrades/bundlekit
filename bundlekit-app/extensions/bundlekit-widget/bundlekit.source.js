@@ -208,7 +208,9 @@
     var format = makeFormatter(root.getAttribute("data-money-format") || "{{amount}}");
     var offerId = root.getAttribute("data-offer-id") || offer.id;
     var form = productForm(root);
-    var selectedIndex = indexOfBadged(tiers);
+    // Always start on a single unit (-1). The badge only highlights a tier;
+    // shoppers opt into a bigger quantity themselves (App Store 1.1.9).
+    var selectedIndex = -1;
 
     function currentVariant() {
       var input = form && formField(form, "id");
@@ -388,14 +390,6 @@
 
     render();
     beacon("view");
-  }
-
-  /** The merchant's highlighted tier, or -1 (a single unit). Without a
-   *  highlight the shopper starts on one unit and opts into a bundle —
-   *  never on a bigger quantity they didn't choose. */
-  function indexOfBadged(tiers) {
-    for (var i = 0; i < tiers.length; i++) if (tiers[i].badge) return i;
-    return -1;
   }
 
   function hide(root) {

@@ -65,7 +65,7 @@ function useTopics(themeEditor: string): Topic[] {
           <List type="number">
             <List.Item>Open the theme editor.</List.Item>
             <List.Item>Select a product page template.</List.Item>
-            <List.Item>Add the "BundleKit" app block wherever you want the widget to appear, then save.</List.Item>
+            <List.Item>Add the "BundleKit — Bundle & save" app block wherever you want the widget to appear, then save.</List.Item>
           </List>
           <Box>
             <Button url={themeEditor} target="_blank">

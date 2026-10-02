@@ -22,7 +22,7 @@ export interface Tier {
   type: DiscountType;
   /** percentage: 0-100 · amount: cents off the whole tier · fixed_price: cents total */
   value: number;
-  /** Wears the "Most popular" badge. At most one tier should set this. */
+  /** Wears the highlight badge. At most one tier should set this. */
   badge?: boolean;
 }
 
