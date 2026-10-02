@@ -51,7 +51,7 @@ model Shop {
   defaultAccent        String  @default("#FF4A1C")
   defaultRadius        Int     @default(10)
   defaultShowTrustLine Boolean @default(true)
-  defaultBadgeText     String  @default("Most popular")
+  defaultBadgeText     String  @default("Recommended")
 
   // Combining-discount defaults (Settings page): what a new offer pre-selects.
   combineProductDefault Boolean @default(false)

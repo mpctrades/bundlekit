@@ -250,7 +250,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
         perUnit: "/ unité",
         // Shop-level badge default is EN-only for now; FR keeps its own
         // translation until per-locale defaults are added (known limitation).
-        badge: "Le plus choisi",
+        badge: "Recommandé",
         trust: "Remise appliquée automatiquement à la caisse",
         addToCart: "Ajouter {qty} au panier",
       },
@@ -740,7 +740,7 @@ export default function OfferBuilder() {
                             {tier.badge ? (
                               <Box background="bg-fill-caution-secondary" borderRadius="full" paddingInline="200" paddingBlock="050">
                                 <Text as="span" variant="bodySm" fontWeight="semibold">
-                                  Most popular
+                                  Highlighted
                                 </Text>
                               </Box>
                             ) : null}
