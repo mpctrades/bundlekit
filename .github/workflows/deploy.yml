@@ -69,8 +69,8 @@ jobs:
       run:
         working-directory: bundlekit-app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
@@ -89,8 +89,8 @@ jobs:
       run:
         working-directory: bundlekit-app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
@@ -138,5 +138,9 @@ jobs:
             # to /privacy.html, so a missing file here is a review failure.
             WEB_ROOT="${{ vars.BUNDLEKIT_WEB_ROOT || '/var/www/bundlekit' }}"
             sudo install -m 644 ../bundlekit-web/index.html ../bundlekit-web/privacy.html "$WEB_ROOT/"
+            # Also serve it at /privacy (nginx's default `$uri/` lookup finds
+            # privacy/index.html); app/routes/privacy.tsx and older links use
+            # that URL, and nginx doesn't proxy /privacy to the app.
+            sudo install -D -m 644 ../bundlekit-web/privacy.html "$WEB_ROOT/privacy/index.html"
 
             echo "Deployed $(git rev-parse --short HEAD)"
