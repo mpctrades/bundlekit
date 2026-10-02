@@ -795,7 +795,7 @@ export default function OfferBuilder() {
                         </InlineStack>
 
                         <Checkbox
-                          label="Highlight as Most Popular"
+                          label="Highlight this tier"
                           checked={Boolean(tier.badge)}
                           onChange={(checked) =>
                             setTiers((current) => current.map((item, i) => ({ ...item, badge: checked && i === index })))
