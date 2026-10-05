@@ -17,7 +17,6 @@ import {
   totalStats,
 } from "../lib/stats.server";
 import { getFunctionId } from "../lib/offers.server";
-import { getPricingPlansUrl, lookupActivePlan } from "../lib/billing.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
 import { useThemeEditorDeepLink } from "../lib/theme";
@@ -40,29 +39,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("days"));
   const days = RANGE_OPTIONS.includes(requested) ? requested : 30;
-  const pricingPlansUrl = getPricingPlansUrl(session.shop);
-  // The full analytics dashboard is a Grow/Pro feature (PLAN_FEATURES, and
-  // Shopify's Managed Pricing page word for word). A failed plan lookup
-  // (null) never locks the page — a paying merchant must not lose it.
-  const locked = (await lookupActivePlan(admin)) === "free";
-
-  if (locked) {
-    return {
-      locked,
-      pricingPlansUrl,
-      days,
-      shopDomain: session.shop,
-      currency: FALLBACK_CURRENCY,
-      accent: FALLBACK_ACCENT,
-      liveCount: 0,
-      functionDeployed: false,
-      totals: totalStats([]),
-      trends: { revenue: null, orders: null, views: null, selects: null },
-      buckets: bucketByDay([], days),
-      perOffer: [] as ReturnType<typeof summarizeByOffer>,
-      error: null as string | null,
-    };
-  }
 
   try {
     const shop = await getOrCreateShop(session.shop);
@@ -89,8 +65,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const previousTotals = totalStats(previousRows);
 
     return {
-      locked,
-      pricingPlansUrl,
       days,
       shopDomain: session.shop,
       currency: shop.currency,
@@ -111,8 +85,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[bundlekit] analytics loader failed", error);
     return {
-      locked,
-      pricingPlansUrl,
       days,
       shopDomain: session.shop,
       currency: FALLBACK_CURRENCY,
@@ -132,7 +104,7 @@ const OFFER_TABLE_COLUMNS = ["name", "views", "selects", "orders", "conversion",
 type OfferTableColumn = (typeof OFFER_TABLE_COLUMNS)[number];
 
 export default function Analytics() {
-  const { locked, pricingPlansUrl, days, shopDomain, currency, accent, liveCount, functionDeployed, totals, trends, buckets, perOffer, error } =
+  const { days, shopDomain, currency, accent, liveCount, functionDeployed, totals, trends, buckets, perOffer, error } =
     useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const themeEditor = useThemeEditorDeepLink(shopDomain);
@@ -186,32 +158,6 @@ export default function Analytics() {
     },
     { label: "Bundle revenue", value: formatMoney(totals.revenue, currency) },
   ];
-
-  if (locked) {
-    return (
-      <Page>
-        <BlockStack gap="500">
-          <PageHeader eyebrow="Analytics" title="Analytics" subtitle="Real numbers from your published offers — no sample data." />
-          <Panel>
-            <BlockStack gap="300">
-              <Text as="h2" variant="headingMd">
-                The full analytics dashboard is part of Grow and Pro
-              </Text>
-              <Text as="p" tone="subdued">
-                Upgrade to see revenue, orders, views and selections for every offer, with trends and a conversion
-                funnel. Your Dashboard still shows your live offers on the Free plan.
-              </Text>
-              <Box>
-                <Button url={pricingPlansUrl} target="_top" variant="primary">
-                  View plans
-                </Button>
-              </Box>
-            </BlockStack>
-          </Panel>
-        </BlockStack>
-      </Page>
-    );
-  }
 
   return (
     <Page>

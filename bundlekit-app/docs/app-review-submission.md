@@ -69,13 +69,9 @@ These have to happen in dashboards and stores, so they're outside this repo:
 > discount is named. With 1 unit there's no discount. Products that no offer
 > targets show no widget at all.
 >
-> **5. Analytics (Grow and Pro).** On the Free plan, Analytics shows a short
-> note that the full dashboard is part of Grow and Pro, with a *View plans*
-> button. This is expected. To test it, go to Plans & billing → *Choose a
-> plan* and pick Grow (14-day trial, test charge on a development store).
-> Analytics then shows widget views and tier selections. After a test order
-> (Bogus Gateway), it also shows the order count and discounted revenue for
-> that offer.
+> **5. Analytics.** Analytics shows widget views and tier selections. After a
+> test order (Bogus Gateway), it also shows the order count and discounted
+> revenue for that offer.
 >
 > **6. Billing.** Plans & billing → *Choose a plan* opens Shopify's
 > plan-selection page (Managed Pricing). Grow and Pro have a 14-day trial.
@@ -107,7 +103,7 @@ add English subtitles.
 | 3 | 0:55–1:20 | "Open the theme editor" deep link → block pre-added → Save. |
 | 4 | 1:20–2:00 | Storefront product page: widget, select 3 units, Add to cart, checkout total shows the named discount. Show 1 unit = no discount. |
 | 5 | 2:00–2:20 | Design page (colours/radius) and Settings (discount stacking). |
-| 6 | 2:20–2:40 | Analytics locked on Free → Plans & billing → Shopify plan page → choose Grow → Analytics after the test order. |
+| 6 | 2:20–2:40 | Analytics after the test order. Plans & billing → Shopify plan page. |
 | 7 | 2:40–2:50 | Help & support page and support email. |
 
 ---
