@@ -6,7 +6,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, session } = await authenticate.webhook(request);
   const current = payload.current as string[];
   if (session) {
-    await prisma.session.update({
+    // updateMany: a retry can arrive after uninstall removed the session, and
+    // update() would throw (P2025) and answer 500, so Shopify keeps retrying.
+    await prisma.session.updateMany({
       where: { id: session.id },
       data: { scope: current.toString() },
     });
