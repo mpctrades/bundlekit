@@ -20,6 +20,7 @@ import {
 import { getFunctionId, reconcileLiveOffers, removeOrphanedOfferMetafields } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
 import { formatMoney } from "../lib/format";
+import { useReviewRequest } from "../lib/reviews";
 import { Chart } from "../components/Chart";
 import { KpiCard } from "../components/KpiCard";
 import { Panel } from "../components/Panel";
@@ -175,6 +176,10 @@ export default function Dashboard() {
   }, []);
 
   const themeEditor = useThemeEditorDeepLink(shopDomain);
+
+  // Success moment: an order in the last 30 days actually used a BundleKit
+  // tier (orders only count lines tagged by the widget).
+  useReviewRequest(!error && totals.orders > 0);
 
   const healthChecks = [
     { label: "Publish an offer", done: liveCount > 0 },
