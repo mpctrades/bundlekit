@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { verifyWebhook } from "../lib/webhook.server";
 import prisma from "../db.server";
 
 /**
@@ -8,7 +8,7 @@ import prisma from "../db.server";
  * acknowledge honestly, and shop/redact drops the shop and its sessions.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { topic, shop } = await authenticate.webhook(request);
+  const { topic, shop } = await verifyWebhook(request);
 
   if (topic === "SHOP_REDACT") {
     await prisma.session.deleteMany({ where: { shop } });

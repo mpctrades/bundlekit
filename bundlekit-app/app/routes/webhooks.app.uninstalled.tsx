@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { verifyWebhook } from "../lib/webhook.server";
 import prisma from "../db.server";
 
 /**
@@ -8,7 +8,7 @@ import prisma from "../db.server";
  * theme. All that is left for us is to forget the shop.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic } = await authenticate.webhook(request);
+  const { shop, topic } = await verifyWebhook(request);
   console.log(`[bundlekit] ${topic} for ${shop}`);
 
   // Unconditional: Shopify retries this webhook, and a retry arrives after

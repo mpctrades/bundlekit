@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { verifyWebhook } from "../lib/webhook.server";
 import prisma from "../db.server";
 
 /**
@@ -8,7 +8,7 @@ import prisma from "../db.server";
  * that came from it. No customer data is read or stored.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { payload, shop, webhookId } = await authenticate.webhook(request);
+  const { payload, shop, webhookId } = await verifyWebhook(request);
   const lines = (payload.line_items ?? []) as Array<{
     price: string;
     quantity: number;
