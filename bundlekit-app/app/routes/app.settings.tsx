@@ -17,6 +17,7 @@ import prisma from "../db.server";
 import { getOrCreateShop } from "../lib/shop.server";
 import { getFunctionId } from "../lib/offers.server";
 import { friendlyErrorMessage } from "../lib/errors";
+import { formatMoney } from "../lib/format";
 import { useThemeEditorDeepLink } from "../lib/theme";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
@@ -209,6 +210,7 @@ export default function Settings() {
   }
 
   const { design } = data;
+  const sampleSaving = formatMoney(398, data.currency);
   const setupDone = [data.functionDeployed, data.widgetSeen, data.scopes.length > 0].filter(Boolean).length;
   const fade = (delay: number) => ({ initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { delay, duration: 0.25 } });
 
@@ -304,7 +306,7 @@ export default function Settings() {
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#18140F" }}>{design.title}</div>
                       {[
                         { qty: "1 unit", save: "", picked: false },
-                        { qty: "2 units", save: design.savingsDisplay === "amount" ? "Save €3.98" : design.savingsDisplay === "percentage" ? "Save 10%" : "Save €3.98 (10%)", picked: true },
+                        { qty: "2 units", save: design.savingsDisplay === "amount" ? `Save ${sampleSaving}` : design.savingsDisplay === "percentage" ? "Save 10%" : `Save ${sampleSaving} (10%)`, picked: true },
                       ].map((row) => (
                         <div
                           key={row.qty}

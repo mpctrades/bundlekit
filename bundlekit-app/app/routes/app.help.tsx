@@ -461,9 +461,25 @@ export default function Help() {
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#36D399" }} />
                     <span style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>Replies within 24 hours</span>
                   </InlineStack>
-                  <Button url={mailto} target="_blank" fullWidth variant="primary" tone="critical">
+                  <a
+                    href={mailto}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "block",
+                      textAlign: "center",
+                      background: "#FF5A1F",
+                      color: "#fff",
+                      fontWeight: 650,
+                      fontSize: 13,
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      textDecoration: "none",
+                      boxShadow: "0 1px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2)",
+                    }}
+                  >
                     Email support
-                  </Button>
+                  </a>
                   <button
                     type="button"
                     onClick={async () => showToast((await copyText(SUPPORT_EMAIL)) ? "Email address copied" : SUPPORT_EMAIL)}

@@ -67,7 +67,7 @@ export function PricingCard({
         </Text>
       </BlockStack>
 
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10, flex: 1 }}>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10, flex: 1, alignContent: "start" }}>
         {features.map((feature) => (
           <li key={feature} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             <span style={{ width: 20, height: 20, minWidth: 20, display: "inline-flex", color: "#6E6555" }}>
