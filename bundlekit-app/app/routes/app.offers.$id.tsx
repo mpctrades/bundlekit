@@ -12,6 +12,7 @@ import {
   EmptyState,
   InlineStack,
   Layout,
+  List,
   Page,
   RadioButton,
   Select,
@@ -525,6 +526,10 @@ export default function OfferBuilder() {
     return errors;
   }, [tiers, targetType, targetResources, scheduleMode, startsAtLocal, endsAtLocal]);
   const hasBlockingErrors = Object.keys(clientErrors).length > 0;
+  // A brand-new offer starts without products, which is expected, not a
+  // mistake: hold its errors back until the merchant tries to save. Existing
+  // offers show problems straight away.
+  const [showErrors, setShowErrors] = useState(offer?.id !== "new");
 
   useEffect(() => {
     if (!isDirty) return;
@@ -582,6 +587,11 @@ export default function OfferBuilder() {
   };
 
   const save = (intent: "save" | "publish") => {
+    if (hasBlockingErrors) {
+      // Buttons stay clickable so the merchant learns what's missing.
+      setShowErrors(true);
+      return;
+    }
     lastIntent.current = intent;
     const form = new FormData();
     form.set("intent", intent);
@@ -599,7 +609,7 @@ export default function OfferBuilder() {
   };
 
   const fieldError = (field: string) =>
-    clientErrors[field as keyof typeof clientErrors] ??
+    (showErrors ? clientErrors[field as keyof typeof clientErrors] : undefined) ??
     (actionData && "field" in actionData && actionData.field === field ? actionData.error : undefined);
 
   const discard = () => {
@@ -630,7 +640,7 @@ export default function OfferBuilder() {
       {isDirty ? (
         <ContextualSaveBar
           message="Unsaved changes"
-          saveAction={{ content: saveLabel, loading: busy, disabled: hasBlockingErrors, onAction: () => save(saveIntent) }}
+          saveAction={{ content: saveLabel, loading: busy, onAction: () => save(saveIntent) }}
           discardAction={{ content: "Discard", onAction: discard }}
         />
       ) : null}
@@ -645,14 +655,23 @@ export default function OfferBuilder() {
                 stays inside our own React tree and just works. */}
             <InlineStack align="end" gap="200">
               {isLive ? null : (
-                <Button disabled={hasBlockingErrors || busy} onClick={() => save("save")}>
+                <Button disabled={busy} onClick={() => save("save")}>
                   Save draft
                 </Button>
               )}
-              <Button variant="primary" loading={busy} disabled={hasBlockingErrors} onClick={() => save("publish")}>
+              <Button variant="primary" loading={busy} onClick={() => save("publish")}>
                 {isLive ? "Save" : "Publish"}
               </Button>
             </InlineStack>
+            {showErrors && hasBlockingErrors ? (
+              <Banner tone="warning" title="A few things to finish first">
+                <List>
+                  {Object.values(clientErrors).map((message) => (
+                    <List.Item key={message}>{message}</List.Item>
+                  ))}
+                </List>
+              </Banner>
+            ) : null}
             {offer.resourceLoadError ? <ProductAccessBanner shopDomain={shopDomain} /> : null}
             {actionData && "error" in actionData && actionData.error ? (
               <Banner tone="critical" title="This offer was not published">
