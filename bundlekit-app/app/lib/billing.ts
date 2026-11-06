@@ -38,3 +38,13 @@ export const PLAN_PRICE: Record<PlanKey, string> = {
   grow: "$4.99",
   pro: "$9.99",
 };
+
+/** One line under each price: who the plan is for. Not a feature claim. */
+export const PLAN_TAGLINE: Record<PlanKey, string> = {
+  free: "For trying BundleKit on a few products.",
+  grow: "Everything a growing store needs.",
+  pro: "For large catalogs and many offers.",
+};
+
+/** 14-day trial on paid plans (see PLAN_FEATURES and the Managed Pricing page). */
+export const TRIAL_DAYS = 14;

@@ -3,6 +3,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import polarisTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import bundlekitStyles from "../styles/bundlekit.css?url";
 import { Link, Outlet, isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -11,7 +12,10 @@ import { PAGE_BACKGROUND } from "../lib/theme";
 import { PolarisRouterLink } from "../components/PolarisRouterLink";
 import { ToastProvider } from "../components/ToastProvider";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+export const links = () => [
+  { rel: "stylesheet", href: polarisStyles },
+  { rel: "stylesheet", href: bundlekitStyles },
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);

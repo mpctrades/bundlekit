@@ -64,6 +64,6 @@ subpath = "bundlekit"
 embedded = false
 
 [build]
-automatically_update_urls_on_dev = false
+automatically_update_urls_on_dev = true
 dev_store_url = "bundlekit-aenkvjsc.myshopify.com"
 include_config_on_deploy = true
