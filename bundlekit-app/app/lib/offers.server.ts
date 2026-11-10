@@ -132,6 +132,8 @@ export interface ResourceSummary {
   title: string;
   image: string | null;
   subtitle?: string;
+  /** Products only: for "View on your store" links. */
+  handle?: string;
 }
 
 const RESOURCE_SUMMARIES = `#graphql
@@ -140,6 +142,7 @@ const RESOURCE_SUMMARIES = `#graphql
       id
       ... on Product {
         title
+        handle
         status
         featuredImage { url altText }
       }
@@ -165,6 +168,7 @@ export async function fetchResourceSummaries(
     const nodes: Array<{
       id: string;
       title?: string;
+      handle?: string;
       status?: string;
       featuredImage?: { url: string } | null;
       image?: { url: string } | null;
@@ -177,6 +181,7 @@ export async function fetchResourceSummaries(
         title: node.title,
         image: node.featuredImage?.url ?? node.image?.url ?? null,
         subtitle: node.status === "ARCHIVED" ? "Archived" : node.status === "DRAFT" ? "Unpublished" : undefined,
+        ...(node.handle ? { handle: node.handle } : {}),
       });
     }
   }
@@ -653,6 +658,46 @@ export async function checkConflicts(
 /* Publish: the whole thing, in order                                  */
 /* ------------------------------------------------------------------ */
 
+export interface PublishSteps {
+  wasLive: boolean;
+  previousDiscountGid: string | null;
+  syncDiscount: () => Promise<string>;
+  rememberDiscount: (gid: string) => Promise<void>;
+  writeMetafields: () => Promise<void>;
+  clearRemoved: () => Promise<void>;
+  rollbackMetafields: () => Promise<void>;
+}
+
+/**
+ * The order publishing happens in. The discount comes FIRST: the Function only
+ * discounts products that carry the offer metafield, so a discount with no
+ * metafields yet changes nothing at checkout. Writing the metafields second
+ * means the widget can never show a price checkout won't honour (the old order
+ * wrote metafields first, and a failed discount left the widget live with no
+ * discount behind it).
+ *
+ * If the metafield write fails on an offer that wasn't live, the products it
+ * did reach are cleared again, so a failed first publish leaves nothing half
+ * visible on the storefront. A live offer keeps its widget (its discount is
+ * already in place and consistent).
+ */
+export async function runPublishSteps(steps: PublishSteps): Promise<string> {
+  const discountGid = await steps.syncDiscount();
+  if (discountGid !== steps.previousDiscountGid) await steps.rememberDiscount(discountGid);
+  try {
+    await steps.writeMetafields();
+  } catch (error) {
+    if (!steps.wasLive) {
+      await steps.rollbackMetafields().catch((rollbackError) => {
+        console.warn("[bundlekit] metafield rollback after failed publish failed", rollbackError);
+      });
+    }
+    throw error;
+  }
+  await steps.clearRemoved();
+  return discountGid;
+}
+
 export async function publishOffer(
   admin: AdminApiContext,
   offerId: string,
@@ -679,25 +724,39 @@ export async function publishOffer(
     getFunctionId(admin, { id: offer.shopId, functionId: offer.shop.functionId }),
   ]);
 
-  await writeOfferToProducts(admin, productIds, withSchedule(config, schedule));
-  // Products dropped from the target since the last publish must stop
-  // showing the widget — the Function would still honour their metafield.
+  const discountSchedule = { startsAt, endsAt: schedule.endsAt };
   const current = new Set(productIds);
   const removed = offer.resolvedProductIds.filter((id) => !current.has(id));
-  if (removed.length) await clearOfferFromProducts(admin, removed, offer.id);
-  const discountSchedule = { startsAt, endsAt: schedule.endsAt };
-  let discountGid: string;
-  try {
-    discountGid = await syncDiscount(admin, offer, config, functionId, combinesWith, discountSchedule);
-  } catch (error) {
-    // The cached Function id outlives the Function after a reinstall or
-    // redeploy that replaces it. Re-discover it once and retry.
-    if (!offer.shop.functionId) throw error;
-    const freshId = await findFunctionId(admin);
-    if (freshId === functionId) throw error;
-    await prisma.shop.update({ where: { id: offer.shopId }, data: { functionId: freshId } });
-    discountGid = await syncDiscount(admin, offer, config, freshId, combinesWith, discountSchedule);
-  }
+
+  const discountGid = await runPublishSteps({
+    wasLive: offer.status === "live",
+    previousDiscountGid: offer.discountGid,
+    syncDiscount: async () => {
+      try {
+        return await syncDiscount(admin, offer, config, functionId, combinesWith, discountSchedule);
+      } catch (error) {
+        // The cached Function id outlives the Function after a reinstall or
+        // redeploy that replaces it. Re-discover it once and retry.
+        if (!offer.shop.functionId) throw error;
+        const freshId = await findFunctionId(admin);
+        if (freshId === functionId) throw error;
+        await prisma.shop.update({ where: { id: offer.shopId }, data: { functionId: freshId } });
+        return syncDiscount(admin, offer, config, freshId, combinesWith, discountSchedule);
+      }
+    },
+    // Remember a newly created discount straight away, so a retry after a
+    // failed metafield write updates it instead of creating a duplicate.
+    rememberDiscount: async (gid) => {
+      await prisma.offer.update({ where: { id: offerId }, data: { discountGid: gid } });
+    },
+    writeMetafields: () => writeOfferToProducts(admin, productIds, withSchedule(config, schedule)),
+    // Products dropped from the target since the last publish must stop
+    // showing the widget — the Function would still honour their metafield.
+    clearRemoved: async () => {
+      if (removed.length) await clearOfferFromProducts(admin, removed, offer.id);
+    },
+    rollbackMetafields: () => clearOfferFromProducts(admin, productIds, offer.id),
+  });
 
   return prisma.offer.update({
     where: { id: offerId },

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { computeDisplayStatus, findMissingDiscounts } from "./offers.server";
+import { describe, expect, it, vi } from "vitest";
+import { computeDisplayStatus, findMissingDiscounts, runPublishSteps, type PublishSteps } from "./offers.server";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 
 const NOW = new Date("2026-08-22T12:00:00Z");
@@ -69,5 +69,56 @@ describe("findMissingDiscounts", () => {
     const { admin, calls } = adminReturning([]);
     expect((await findMissingDiscounts(admin, [])).size).toBe(0);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("runPublishSteps", () => {
+  function steps(overrides: Partial<PublishSteps> = {}) {
+    const calls: string[] = [];
+    const base: PublishSteps = {
+      wasLive: false,
+      previousDiscountGid: null,
+      syncDiscount: vi.fn(async () => (calls.push("discount"), "gid://shopify/DiscountAutomaticNode/1")),
+      rememberDiscount: vi.fn(async () => void calls.push("remember")),
+      writeMetafields: vi.fn(async () => void calls.push("metafields")),
+      clearRemoved: vi.fn(async () => void calls.push("clearRemoved")),
+      rollbackMetafields: vi.fn(async () => void calls.push("rollback")),
+      ...overrides,
+    };
+    return { steps: base, calls };
+  }
+
+  it("creates the discount before any product shows the widget", async () => {
+    const { steps: s, calls } = steps();
+    await expect(runPublishSteps(s)).resolves.toBe("gid://shopify/DiscountAutomaticNode/1");
+    expect(calls).toEqual(["discount", "remember", "metafields", "clearRemoved"]);
+  });
+
+  it("never writes metafields when the discount fails", async () => {
+    const { steps: s, calls } = steps({ syncDiscount: vi.fn(async () => Promise.reject(new Error("discount create"))) });
+    await expect(runPublishSteps(s)).rejects.toThrow("discount create");
+    expect(calls).toEqual([]);
+  });
+
+  it("does not re-save an unchanged discount id", async () => {
+    const { steps: s, calls } = steps({ previousDiscountGid: "gid://shopify/DiscountAutomaticNode/1" });
+    await runPublishSteps(s);
+    expect(calls).toEqual(["discount", "metafields", "clearRemoved"]);
+  });
+
+  it("clears half-written widgets when a first publish fails", async () => {
+    const { steps: s, calls } = steps({ writeMetafields: vi.fn(async () => Promise.reject(new Error("metafieldsSet"))) });
+    await expect(runPublishSteps(s)).rejects.toThrow("metafieldsSet");
+    expect(calls).toEqual(["discount", "remember", "rollback"]);
+  });
+
+  it("leaves a live offer's widgets alone when a republish fails", async () => {
+    const { steps: s, calls } = steps({
+      wasLive: true,
+      previousDiscountGid: "gid://shopify/DiscountAutomaticNode/1",
+      writeMetafields: vi.fn(async () => Promise.reject(new Error("metafieldsSet"))),
+    });
+    await expect(runPublishSteps(s)).rejects.toThrow("metafieldsSet");
+    expect(calls).toEqual(["discount"]);
   });
 });
