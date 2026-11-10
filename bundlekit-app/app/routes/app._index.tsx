@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Banner, BlockStack, Box, Button, EmptyState, Icon, InlineGrid, InlineStack, Layout, Page, Text } from "@shopify/polaris";
-import { CashDollarIcon, ChartVerticalIcon, LiveIcon, OrderIcon } from "@shopify/polaris-icons";
+import { Banner, BlockStack, Box, Button, Icon, InlineGrid, InlineStack, Layout, Page, Text, Thumbnail } from "@shopify/polaris";
+import { CashDollarIcon, ChartVerticalIcon, ImageIcon, LiveIcon, OrderIcon } from "@shopify/polaris-icons";
 import { motion } from "motion/react";
 import { useLoaderData, useNavigate } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -26,6 +26,8 @@ import { KpiCard } from "../components/KpiCard";
 import { Panel } from "../components/Panel";
 import { PageHeader } from "../components/PageHeader";
 import { SetupChecklist } from "../components/SetupChecklist";
+import { fetchStarterProducts, type StarterProduct } from "../lib/starter.server";
+import { describeTiers, productNumericId, STARTER_OFFERS } from "../lib/starters";
 
 // Schema defaults (prisma/schema.prisma Shop model) — used only when the
 // dashboard's own data can't be read at all, so the page still renders
@@ -105,6 +107,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ]);
     const currency = syncedCurrency ?? shop.currency;
 
+    // A brand-new store gets ready-made starter offers filled with its own
+    // best sellers. Only fetched while there are no offers at all.
+    const starterProducts: StarterProduct[] = offerCount === 0 ? await fetchStarterProducts(admin, 3) : [];
+    // "Publish an offer" opens the newest draft, if there is one, instead of
+    // the offers list.
+    const latestDraft =
+      liveCount === 0 && offerCount > 0
+        ? await prisma.offer.findFirst({
+            where: { shopId: shop.id, status: "draft" },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true },
+          })
+        : null;
+
     const totals = totalStats(rows);
     const previousTotals = totalStats(previousRows);
 
@@ -124,6 +140,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       buckets: bucketByDay(rows, 30),
       topOffers: summarizeByOffer(rows).slice(0, 5),
       greeting: greeting(new Date().getHours()),
+      starterProducts,
+      latestDraftId: latestDraft?.id ?? null,
       error: null as string | null,
     };
   } catch (error) {
@@ -142,6 +160,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       buckets: bucketByDay([], 30),
       topOffers: [] as ReturnType<typeof summarizeByOffer>,
       greeting: greeting(new Date().getHours()),
+      starterProducts: [] as StarterProduct[],
+      latestDraftId: null as string | null,
       error: friendlyErrorMessage(error),
     };
   }
@@ -161,6 +181,8 @@ export default function Dashboard() {
     buckets,
     topOffers,
     greeting: serverGreeting,
+    starterProducts,
+    latestDraftId,
     error,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -193,25 +215,98 @@ export default function Dashboard() {
   const hasRevenueData = totals.revenue > 0 || totals.orders > 0;
   const { conversionRate, aov } = rates;
 
+  const publishOfferStep = () => navigate(latestDraftId ? `/app/offers/${latestDraftId}` : "/app/offers");
+
   if (offerCount === 0) {
+    const productParam = starterProducts.map((product) => productNumericId(product.id)).join(",");
+    const starterUrl = (id: string) =>
+      `/app/offers/new?starter=${encodeURIComponent(id)}${productParam ? `&products=${productParam}` : ""}`;
+    const guide = [
+      {
+        label: "1. Publish your first offer — pick a starter below",
+        done: liveCount > 0,
+        onClick: () => navigate(starterUrl(STARTER_OFFERS[0].id)),
+      },
+      {
+        label: "2. Add the BundleKit widget to your product page",
+        done: totals.views > 0,
+        onClick: () => window.open(themeEditor, "_blank"),
+      },
+      { label: "3. Check it on your store: add two units to the cart", done: false },
+    ];
     return (
       <Page>
         <BlockStack gap="500">
-          <PageHeader eyebrow="Overview" title={`${timeGreeting} 👋`} subtitle="Here's how your BundleKit offers are performing." />
+          <PageHeader
+            eyebrow="Get started"
+            title={`${timeGreeting} 👋`}
+            subtitle="Three steps, about two minutes, and your first bundle offer is live."
+          />
           {error ? <Banner tone="critical" title="Couldn't load your dashboard data">{error}</Banner> : null}
-          <Panel padding="0px">
-            <EmptyState
-              heading="Create your first offer"
-              action={{ content: "Create offer", onAction: () => navigate("/app/offers/new") }}
-              secondaryAction={{ content: "Place the block in your theme", url: themeEditor, target: "_blank" }}
-              image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-            >
-              <p>
-                Once you publish an offer, its revenue, orders and views show up here in real time. Nothing here is
-                sample data.
-              </p>
-            </EmptyState>
+
+          <Panel>
+            <BlockStack gap="300">
+              <Text as="h2" variant="headingMd">
+                Set up BundleKit —{" "}
+                <Text as="span" tone="subdued" fontWeight="regular">
+                  {guide.filter((item) => item.done).length} of {guide.length} complete
+                </Text>
+              </Text>
+              <SetupChecklist items={guide} />
+            </BlockStack>
           </Panel>
+
+          <BlockStack gap="300">
+            <InlineStack align="space-between" blockAlign="end">
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">Start with a ready-made offer</Text>
+                <Text as="p" tone="subdued">
+                  {starterProducts.length
+                    ? "Already filled in with your best-selling products. Review it, then click Publish."
+                    : "Pick one, choose your products, then click Publish."}
+                </Text>
+              </BlockStack>
+              <Button variant="plain" onClick={() => navigate("/app/offers/new")}>
+                Or start from scratch
+              </Button>
+            </InlineStack>
+
+            <div className="bk-grid-3">
+              {STARTER_OFFERS.map((starter) => (
+                <div key={starter.id} className="bk-stat" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Text as="h3" variant="headingSm">{starter.title}</Text>
+                    {starter.recommended ? <span className="bk-chip bk-chip--popular">Most popular</span> : null}
+                  </InlineStack>
+                  <Text as="p" tone="subdued" variant="bodySm">{starter.description}</Text>
+                  <Text as="p" variant="bodySm" fontWeight="medium">{describeTiers(starter.tiers)}</Text>
+                  {starterProducts.length ? (
+                    <InlineStack gap="150" blockAlign="center" wrap={false}>
+                      {starterProducts.map((product) => (
+                        <Thumbnail key={product.id} source={product.image ?? ImageIcon} alt={product.title} size="extraSmall" />
+                      ))}
+                      <Text as="span" variant="bodySm" tone="subdued" truncate>
+                        {starterProducts.map((product) => product.title).join(", ")}
+                      </Text>
+                    </InlineStack>
+                  ) : null}
+                  <div style={{ marginTop: "auto" }}>
+                    <Button
+                      fullWidth
+                      variant={starter.recommended ? "primary" : "secondary"}
+                      onClick={() => navigate(starterUrl(starter.id))}
+                    >
+                      Use this offer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </BlockStack>
+
+          <Text as="p" tone="subdued" variant="bodySm">
+            Once an offer is live, its revenue, orders and views show up here in real time. Nothing here is sample data.
+          </Text>
         </BlockStack>
       </Page>
     );
@@ -257,7 +352,7 @@ export default function Dashboard() {
   ];
 
   const checklistLinks: Partial<Record<string, () => void>> = {
-    "Publish an offer": () => navigate("/app/offers"),
+    "Publish an offer": publishOfferStep,
     "Add BundleKit to your product page": () => window.open(themeEditor, "_blank"),
   };
 
@@ -386,7 +481,7 @@ export default function Dashboard() {
                           fullWidth
                           onClick={
                             nextStep.label === "Publish an offer"
-                              ? () => navigate("/app/offers")
+                              ? publishOfferStep
                               : nextStep.label === "Add BundleKit to your product page"
                                 ? () => window.open(themeEditor, "_blank")
                                 : () => navigate("/app/help")

@@ -23,6 +23,7 @@ import {
   isRouteErrorResponse,
   useActionData,
   useLoaderData,
+  useLocation,
   useNavigate,
   useNavigation,
   useRouteError,
@@ -48,6 +49,7 @@ import { OfferPreview, type CardStyle, type SavingsDisplay } from "../components
 import { Panel } from "../components/Panel";
 import { ResourcePickerField, type PickedResource } from "../components/ResourcePickerField";
 import { StatusPill } from "../components/StatusPill";
+import { findStarter, parseStarterProductIds } from "../lib/starters";
 import { useToast } from "../components/ToastProvider";
 
 const NAME_MAX_LENGTH = 100;
@@ -70,21 +72,39 @@ async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const shop = await getOrCreateShop(session.shop);
   const previewDesign = { savingsDisplay: shop.defaultSavingsDisplay as SavingsDisplay, cardStyle: shop.defaultCardStyle as CardStyle };
+  // Same signal as the Dashboard's setup card: a storefront view beacon only
+  // exists once the widget block is on a product page.
+  const widgetSeen = (await prisma.offerStat.count({ where: { offer: { shopId: shop.id }, views: { gt: 0 } } }).catch(() => 0)) > 0;
 
   if (params.id === "new") {
+    // Starter offers from the Dashboard open here already filled in. Both
+    // params are checked: an unknown template is ignored, and only real,
+    // non-archived products of this shop are kept.
+    const url = new URL(request.url);
+    const starter = findStarter(url.searchParams.get("starter"));
+    let starterResources: PickedResource[] = [];
+    const starterIds = parseStarterProductIds(url.searchParams.get("products"));
+    if (starterIds.length) {
+      starterResources = await fetchResourceSummaries(admin, starterIds)
+        .then((found) => found.filter((resource) => resource.subtitle !== "Archived"))
+        .catch((error) => {
+          console.warn("[bundlekit] starter product lookup failed", error);
+          return [] as PickedResource[];
+        });
+    }
     // Plans limit *live* offers (as Shopify's plan page states), so drafts
     // are unlimited and the builder always opens — the limit is enforced
     // when publishing.
     return {
       offer: {
         id: "new",
-        name: "Buy more, save more",
+        name: starter?.name ?? "Buy more, save more",
         kind: "quantity",
         status: "draft",
         targetType: "products",
-        targetResources: [] as PickedResource[],
+        targetResources: starterResources,
         resourceLoadError: false,
-        tiers: DEFAULT_TIERS,
+        tiers: starter?.tiers ?? DEFAULT_TIERS,
         accent: shop.defaultAccent,
         combineProduct: shop.combineProductDefault,
         combineOrder: shop.combineOrderDefault,
@@ -95,6 +115,8 @@ async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
       shopDomain: shop.domain,
       badgeText: shop.defaultBadgeText,
       previewDesign,
+      widgetSeen,
+      fromStarter: Boolean(starter),
     };
   }
 
@@ -150,6 +172,8 @@ async function handleOfferLoader({ params, request }: LoaderFunctionArgs) {
     shopDomain: shop.domain,
     badgeText: shop.defaultBadgeText,
     previewDesign,
+    widgetSeen,
+    fromStarter: false,
   };
 }
 
@@ -259,6 +283,7 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
   };
 
   let offer;
+  let wasLive = false;
   let intent = form.get("intent");
   try {
     // An offer id from the URL is only trusted if it belongs to this shop.
@@ -272,7 +297,8 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
     // changes and Resume push to the storefront, so saving it without
     // publishing would leave the widget and the checkout discount on
     // different tiers. Saving a live offer always republishes it.
-    if (existing?.status === "live") intent = "publish";
+    wasLive = existing?.status === "live";
+    if (wasLive) intent = "publish";
     offer = offerId
       ? await prisma.offer.update({
           where: { id: offerId },
@@ -330,13 +356,21 @@ async function handleOfferAction({ params, request }: ActionFunctionArgs) {
             ? `Heads up: this offer targets more specific products than "${overrides[0].name}", so it takes priority for ${overrides[0].overlapCount} shared ${plural(overrides[0].overlapCount)}.`
             : undefined;
 
-      return { ok: true, offerId: offer.id, note };
+      // A link to the first targeted product for "View on your store".
+      // Best-effort: a failed lookup only hides that link.
+      let storefrontUrl: string | null = null;
+      if (candidateProductIds.length) {
+        const [first] = await fetchResourceSummaries(admin, [candidateProductIds[0]]).catch(() => []);
+        if (first?.handle) storefrontUrl = `https://${shop.domain}/products/${first.handle}`;
+      }
+
+      return { ok: true, published: true, firstPublish: !wasLive, offerId: offer.id, note, storefrontUrl };
     } catch (error) {
-      return { error: friendlyErrorMessage(error), offerId: offer.id };
+      return { error: friendlyErrorMessage(error), published: false, offerId: offer.id };
     }
   }
 
-  return { ok: true, offerId: offer.id };
+  return { ok: true, published: false, offerId: offer.id };
 }
 
 /** datetime-local inputs show/parse LOCAL time. Converting here (not on the
@@ -428,11 +462,74 @@ function ProductAccessBanner({ shopDomain }: { shopDomain: string }) {
   );
 }
 
+/** Shown once, right after an offer's first publish: the two things that
+ *  decide whether shoppers actually see it. */
+function PublishedNextSteps({
+  themeEditor,
+  storefrontUrl,
+  widgetSeen,
+}: {
+  themeEditor: string;
+  storefrontUrl: string | null;
+  widgetSeen: boolean;
+}) {
+  return (
+    <Banner tone="success" title="Your offer is live">
+      <BlockStack gap="300">
+        <Text as="p">The discount is active at checkout. Two quick steps so shoppers can see it:</Text>
+        <div>
+          <div className="bk-step" style={{ alignItems: "flex-start" }}>
+            <span className={`bk-step__dot ${widgetSeen ? "bk-step__dot--done" : "bk-step__dot--next"}`}>{widgetSeen ? "✓" : "1"}</span>
+            <BlockStack gap="100">
+              <Text as="p" fontWeight="semibold">
+                {widgetSeen ? "BundleKit is on your product page" : "Add the widget to your product page"}
+              </Text>
+              <Text as="p" tone="subdued" variant="bodySm">
+                {widgetSeen
+                  ? "Shoppers are already seeing your offers."
+                  : "The theme editor opens with the BundleKit block added. Drag it under the price, then click Save."}
+              </Text>
+              {widgetSeen ? null : (
+                <InlineStack>
+                  <Button url={themeEditor} target="_blank" variant="primary">
+                    Add the widget
+                  </Button>
+                </InlineStack>
+              )}
+            </BlockStack>
+          </div>
+          <div className="bk-step" style={{ alignItems: "flex-start" }}>
+            <span className={`bk-step__dot${widgetSeen ? " bk-step__dot--next" : ""}`}>2</span>
+            <BlockStack gap="100">
+              <Text as="p" fontWeight="semibold">Check it on your store</Text>
+              <Text as="p" tone="subdued" variant="bodySm">
+                Add two units to the cart and confirm the checkout total matches the widget.
+              </Text>
+              {storefrontUrl ? (
+                <InlineStack>
+                  <Button url={storefrontUrl} target="_blank">
+                    View on your store
+                  </Button>
+                </InlineStack>
+              ) : null}
+            </BlockStack>
+          </div>
+        </div>
+      </BlockStack>
+    </Banner>
+  );
+}
+
 export default function OfferBuilder() {
   const data = useLoaderData<typeof loader>();
   const themeEditor = useThemeEditorDeepLink("shopDomain" in data ? data.shopDomain ?? "" : "");
   const navigate = useNavigate();
-  const actionData = useActionData<typeof action>();
+  const freshActionData = useActionData<typeof action>();
+  const location = useLocation();
+  // The first save of a new offer moves to its own URL (below), which drops
+  // the action result. It travels along in navigation state so the outcome —
+  // especially a publish error — stays on screen instead of vanishing.
+  const actionData = freshActionData ?? (location.state as { flash?: typeof freshActionData } | null)?.flash;
   const navigation = useNavigation();
   const submit = useSubmit();
   const busy = navigation.state === "submitting";
@@ -440,20 +537,20 @@ export default function OfferBuilder() {
   const lastIntent = useRef<"save" | "publish" | null>(null);
 
   useEffect(() => {
-    if (!actionData) return;
-    if ("error" in actionData && actionData.error) {
-      showToast(actionData.error, true);
-    } else if ("ok" in actionData) {
-      showToast(lastIntent.current === "publish" ? "Offer published" : "Offer saved");
+    if (!freshActionData) return;
+    if ("error" in freshActionData && freshActionData.error) {
+      showToast(freshActionData.error, true);
+    } else if ("ok" in freshActionData) {
+      showToast(freshActionData.published ? "Offer published" : "Draft saved");
     }
     // The first save of a new offer creates it. Stay on /offers/new and the
     // next Save or Publish would create a second copy, so move to its URL.
-    if ("offer" in data && data.offer.id === "new" && "offerId" in actionData && actionData.offerId) {
-      navigate(`/app/offers/${actionData.offerId}`, { replace: true });
+    if ("offer" in data && data.offer.id === "new" && "offerId" in freshActionData && freshActionData.offerId) {
+      navigate(`/app/offers/${freshActionData.offerId}`, { replace: true, state: { flash: freshActionData } });
     }
     // actionData is a fresh object each submission, so this only fires once per response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionData]);
+  }, [freshActionData]);
 
   // All hooks below must run on every render regardless of which loader
   // shape came back — a load-error response has no `offer` to seed state
@@ -568,7 +665,7 @@ export default function OfferBuilder() {
     );
   }
 
-  const { shopDomain, badgeText, previewDesign } = data;
+  const { shopDomain, badgeText, previewDesign, widgetSeen, fromStarter } = data;
   // Edits to a live offer go straight to the storefront (see the action).
   const isLive = offer.status === "live";
   const saveIntent = isLive ? "publish" : "save";
@@ -673,16 +770,40 @@ export default function OfferBuilder() {
               </Banner>
             ) : null}
             {offer.resourceLoadError ? <ProductAccessBanner shopDomain={shopDomain} /> : null}
+            {fromStarter && offer.id === "new" && !actionData ? (
+              <Banner tone="info" title="Your starter offer is ready">
+                <p>
+                  {offer.targetResources.length
+                    ? "We filled it in with your best-selling products. Check the products and discounts, then click Publish."
+                    : "Pick the products it should apply to, check the discounts, then click Publish."}
+                </p>
+              </Banner>
+            ) : null}
             {actionData && "error" in actionData && actionData.error ? (
-              <Banner tone="critical" title="This offer was not published">
+              <Banner
+                tone="critical"
+                title={lastIntent.current === "save" ? "This offer was not saved" : "This offer was not published"}
+              >
                 <p>{actionData.error}</p>
               </Banner>
             ) : null}
-            {actionData && "ok" in actionData ? (
+            {actionData && "ok" in actionData && !actionData.published ? (
+              <Banner tone="info" title="Draft saved">
+                <p>It isn&apos;t on your storefront yet. Click Publish when you&apos;re ready.</p>
+              </Banner>
+            ) : null}
+            {actionData && "ok" in actionData && actionData.published && actionData.firstPublish ? (
+              <PublishedNextSteps
+                themeEditor={themeEditor}
+                storefrontUrl={actionData.storefrontUrl ?? null}
+                widgetSeen={widgetSeen}
+              />
+            ) : null}
+            {actionData && "ok" in actionData && actionData.published && !actionData.firstPublish ? (
               <Banner tone="success" title="Saved">
                 <p>
-                  Add two units to a cart on a targeted product and confirm the
-                  checkout total matches the widget.
+                  Your changes are live. Add two units to a cart on a targeted product and confirm the checkout
+                  total matches the widget.
                 </p>
               </Banner>
             ) : null}
